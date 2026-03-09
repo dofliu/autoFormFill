@@ -66,6 +66,14 @@ npm run dev
 | `app/services/document_generator.py` | 文件填寫（docx 模板 + PDF AcroForm widget） |
 | `app/services/intent_router.py` | LLM 欄位分類（SQL_DB / VECTOR_DB / SKIP） |
 | `app/services/rag_pipeline.py` | 檢索 + 生成 + 幻覺防護迴圈 |
+| `app/llm/retry.py` | LLM 重試工具（`is_retryable()` + `@with_retry()` 指數退避） |
+| `app/schemas/error.py` | 統一錯誤回應 schema + error code 常數 |
+| `app/models/entity.py` | Entity ORM 模型（泛化實體 + JSON 屬性） |
+| `app/services/entity_service.py` | Entity async CRUD + 屬性名聚合 |
+| `app/routers/entities.py` | Entity CRUD API（`/api/v1/users/{id}/entities`） |
+| `app/models/entity_relation.py` | EntityRelation ORM 模型（實體間有向關係） |
+| `app/services/entity_relation_service.py` | EntityRelation async CRUD + graph query helpers |
+| `app/routers/entity_relations.py` | Entity Relations CRUD + Graph API |
 | `app/job_store.py` | 填寫任務持久化（async, DB-backed + in-memory fallback） |
 | `app/models/form_job.py` | FormJob ORM 模型（job_id, user_id, fields_json...） |
 | `app/services/job_service.py` | FormJob async CRUD 操作 |
@@ -89,6 +97,22 @@ npm run dev
 | `frontend/src/pages/EmailDraftPage.tsx` | 郵件草稿生成 UI（表單 + 串流預覽） |
 | `frontend/src/pages/ReportPage.tsx` | 報告生成 UI（表單 + Markdown 串流預覽 + 下載） |
 | `frontend/src/pages/IndexingStatusPage.tsx` | 自動索引狀態監控頁面 |
+| `frontend/src/pages/EntityPage.tsx` | 實體管理 UI（CRUD + 動態屬性 + 類型篩選） |
+| `frontend/src/pages/KnowledgeGraphPage.tsx` | 知識圖譜視覺化（react-force-graph-2d + 篩選 + 側面板） |
+| `frontend/src/components/AddRelationModal.tsx` | 新增關係對話框（來源/目標選擇 + 類型建議） |
+| `app/models/compliance_rule.py` | ComplianceRule ORM 模型（規則引擎） |
+| `app/services/compliance_service.py` | 合規檢查 CRUD + 驗證引擎（5 種規則類型） |
+| `app/routers/compliance.py` | 合規 CRUD + `/check/{job_id}` API |
+| `app/models/document_version.py` | DocumentVersion ORM 模型（版本追蹤） |
+| `app/services/version_service.py` | 版本 CRUD + 行級 diff 引擎（difflib） |
+| `app/routers/versions.py` | 版本 CRUD + `/diff/{old}/{new}` API |
+| `app/models/reminder.py` | Reminder ORM 模型（智能提醒） |
+| `app/services/reminder_service.py` | 提醒 CRUD + fill-diff 偵測 + 截止日掃描 |
+| `app/routers/reminders.py` | 提醒 CRUD + `/dismiss-all` + `/fill-diff/{job_id}` API |
+| `frontend/src/pages/CompliancePage.tsx` | 合規規則管理 UI（CRUD + 開關 + 嚴重等級色碼） |
+| `frontend/src/pages/VersionPage.tsx` | 版本追蹤 UI（檔案側欄 + 版本歷史 + diff viewer） |
+| `frontend/src/pages/ReminderPage.tsx` | 智能提醒 UI（篩選標籤 + 優先順序 + 新增表單） |
+| `frontend/src/components/ErrorBoundary.tsx` | 全域 React Error Boundary |
 | `frontend/vite.config.ts` | Vite 設定（proxy、plugins） |
 
 ## API 路由總覽
@@ -103,6 +127,19 @@ DELETE /api/v1/users/{id}                       刪除使用者
 GET    /api/v1/users/{id}/education/            學經歷列表
 POST   /api/v1/users/{id}/education/            新增學經歷
 DELETE /api/v1/users/{id}/education/{entry_id}  刪除學經歷
+POST   /api/v1/users/{id}/entities/              新增實體
+GET    /api/v1/users/{id}/entities/              實體列表（支援 ?entity_type 篩選）
+GET    /api/v1/users/{id}/entities/{eid}         實體詳情
+PUT    /api/v1/users/{id}/entities/{eid}         更新實體
+DELETE /api/v1/users/{id}/entities/{eid}         刪除實體（含 cascade 關聯清理）
+POST   /api/v1/users/{id}/entity-relations/      新增關係
+GET    /api/v1/users/{id}/entity-relations/      關係列表（?relation_type, ?entity_id）
+GET    /api/v1/users/{id}/entity-relations/types  關係類型列表
+GET    /api/v1/users/{id}/entity-relations/graph  完整圖譜資料
+GET    /api/v1/users/{id}/entity-relations/graph/{eid}  1-hop 子圖
+GET    /api/v1/users/{id}/entity-relations/{rid}  關係詳情
+PUT    /api/v1/users/{id}/entity-relations/{rid}  更新關係
+DELETE /api/v1/users/{id}/entity-relations/{rid}  刪除關係
 POST   /api/v1/documents/upload                 上傳文件（multipart）
 GET    /api/v1/documents/search                 語意搜尋
 POST   /api/v1/forms/parse                      解析表單欄位
@@ -119,6 +156,26 @@ POST   /api/v1/indexing/remove-file             手動移除索引
 POST   /api/v1/chat                              知識問答（SSE streaming）
 POST   /api/v1/email/draft                       郵件草稿生成（SSE streaming）
 POST   /api/v1/report/generate                   報告生成（SSE streaming）
+POST   /api/v1/users/{id}/compliance-rules/      新增合規規則
+GET    /api/v1/users/{id}/compliance-rules/      規則列表（?active_only）
+GET    /api/v1/users/{id}/compliance-rules/{rid} 規則詳情
+PUT    /api/v1/users/{id}/compliance-rules/{rid} 更新規則
+DELETE /api/v1/users/{id}/compliance-rules/{rid} 刪除規則
+POST   /api/v1/users/{id}/compliance-rules/check/{job_id}  執行合規檢查
+GET    /api/v1/users/{id}/versions/              版本列表
+GET    /api/v1/users/{id}/versions/files         追蹤檔案列表
+GET    /api/v1/users/{id}/versions/{vid}         版本詳情
+PUT    /api/v1/users/{id}/versions/{vid}         更新版本標籤
+DELETE /api/v1/users/{id}/versions/{vid}         刪除版本
+GET    /api/v1/users/{id}/versions/diff/{old}/{new}  版本差異比對
+POST   /api/v1/users/{id}/reminders/             新增提醒
+GET    /api/v1/users/{id}/reminders/             提醒列表（?status, ?reminder_type）
+GET    /api/v1/users/{id}/reminders/count        未讀提醒數量
+GET    /api/v1/users/{id}/reminders/{rid}        提醒詳情
+PUT    /api/v1/users/{id}/reminders/{rid}        更新提醒狀態
+DELETE /api/v1/users/{id}/reminders/{rid}        刪除提醒
+POST   /api/v1/users/{id}/reminders/dismiss-all  批次忽略所有提醒
+GET    /api/v1/users/{id}/reminders/fill-diff/{job_id}  填寫差異比對
 ```
 
 ## 常見陷阱
@@ -133,7 +190,7 @@ POST   /api/v1/report/generate                   報告生成（SSE streaming）
 ## 測試
 
 ```bash
-# 後端測試（225 tests）
+# 後端測試（374 tests）
 python -m pytest tests/ -v
 
 # 前端型別檢查
@@ -158,6 +215,12 @@ cd frontend && npm run build
 | `tests/test_multi_format.py` | 29 | PPTX/XLSX 解析 + 檔案偵測 + dispatcher + config 驗證 |
 | `tests/test_report_generator.py` | 29 | Report prompt 組合 + SSE 事件 + 搜尋查詢 + 錯誤處理 + schema + DEFAULT_SECTIONS |
 | `tests/test_sse_pipeline.py` | 24 | SSE 格式化 + 多 collection 搜尋 + context formatter + StreamConfig + RAG 管線 |
+| `tests/test_llm_retry.py` | 18 | Retry 邏輯 + 錯誤分類 + fallback + SSE retry + ErrorResponse schema |
+| `tests/test_entity.py` | 25 | Entity model + schema + service + form filler 整合 + intent router 整合 |
+| `tests/test_entity_relation.py` | 26 | EntityRelation model + schema + service CRUD + graph queries + router 整合 |
+| `tests/test_compliance.py` | 33 | ComplianceRule model + schema + field match + rule check + compliance engine + router |
+| `tests/test_version_tracking.py` | 15 | DocumentVersion model + schema + diff engine + service + router |
+| `tests/test_reminders.py` | 32 | Reminder model + schema + fill diff + date extraction + service + constants |
 
 ## 環境變數
 
@@ -189,27 +252,21 @@ cd frontend && npm run build
 |-------|------|------|
 | Phase 1 | ✅ 完成 | 後端 MVP（FastAPI + SQLite + ChromaDB + Gemini） |
 | Phase 2 | ✅ 完成 | 前端 MVP（React 19 + TypeScript + Tailwind CSS） |
-| Phase 2.5 | ✅ 完成 | 收尾：~~持久化 Job Store~~✅、~~PDF 填寫~~✅、~~測試補齊~~✅ |
-| Phase 3 | 🔧 進行中 | 知識引擎基礎：~~資料夾監控~~✅ ~~增量索引~~✅ ~~索引 API+UI~~✅ ~~多格式~~✅、Entity 泛化 |
+| Phase 2.5 | ✅ 完成 | 收尾：~~持久化 Job Store~~✅、~~PDF 填寫~~✅、~~測試補齊~~✅、~~錯誤處理~~✅ |
+| Phase 3 | ✅ 完成 | 知識引擎基礎：~~資料夾監控~~✅ ~~增量索引~~✅ ~~索引 API+UI~~✅ ~~多格式~~✅ ~~Entity 泛化~~✅ |
 | Phase 4 | ✅ 完成 | 多輸出適配器：~~Chat 問答~~✅、~~郵件草稿~~✅、~~報告生成~~✅、~~Adapter 抽象~~✅ |
-| Phase 5 | ⬜ 規劃 | 智能化：知識圖譜、合規檢查、版本追蹤 |
+| Phase 5 | ✅ 完成 | 智能化：~~知識圖譜~~✅、~~合規檢查~~✅、~~版本追蹤~~✅、~~智能提醒~~✅ |
 | Phase 6 | ⬜ 規劃 | 協作與部署：多使用者、權限、Docker |
 
 ### 下一步優先級
 
 > 以下為尚未完成的任務，依建議優先順序排列。
-> 已完成項目（Phase 1-4）詳見 `docs/TODO.md`。
+> 已完成項目（Phase 1-5）詳見 `docs/TODO.md`。
 
-1. **Phase 3.5** — Entity 泛化（設計 Entity + EntityAttribute schema，評估泛化 UserProfile）
-2. **Phase 2.5.4** — 錯誤處理強化（LLM retry、前端 Error Boundary、統一 error response）
-3. **Phase 5.1** — 知識圖譜（Entity Relations + Graph 視覺化）
-4. **Phase 5.2** — 合規檢查（Rule Engine + 欄位驗證）
-5. **Phase 5.3** — 版本追蹤（Document versioning + Diff）
-6. **Phase 5.4** — 智能提醒（截止日偵測 + 通知）
-7. **Phase 6.1** — 認證與權限（JWT + RBAC）
-8. **Phase 6.2** — 多使用者隔離
-9. **Phase 6.3** — Docker 部署
-10. **Phase 6.4** — CI/CD
+1. **Phase 6.1** — 認證與權限（JWT + RBAC）
+2. **Phase 6.2** — 多使用者隔離
+3. **Phase 6.3** — Docker 部署
+4. **Phase 6.4** — CI/CD
 
 ### 架構演進方向
 

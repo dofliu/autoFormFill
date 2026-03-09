@@ -1,16 +1,16 @@
 # SmartFill-Scholar — 技術藍圖
 
-> 最後更新：2026-03-09
+> 最後更新：2026-03-12
 
 ## 總覽
 
 ```
 Phase 1  ✅  後端 MVP          — FastAPI + SQLite + ChromaDB + Gemini
 Phase 2  ✅  前端 MVP          — React 19 + TypeScript + Tailwind CSS
-Phase 2.5 ✅ 收尾補強          — 持久化 Job Store、PDF 填寫、測試補齊
-Phase 3  🔧  知識引擎基礎       — 資料夾監控✅ 增量索引✅ 索引API+UI✅ 多格式✅、Entity 泛化
-Phase 4  ✅  多輸出適配器       — Chat 問答✅、郵件草稿✅、報告生成✅、Adapter 抽象✅
-Phase 5  ⬜  智能化            — 知識圖譜、合規檢查、版本追蹤
+Phase 2.5 ✅  收尾補強          — 持久化 Job Store、PDF 填寫、測試補齊、錯誤處理
+Phase 3  ✅  知識引擎基礎       — 資料夾監控、增量索引、索引API+UI、多格式、Entity 泛化
+Phase 4  ✅  多輸出適配器       — Chat 問答、郵件草稿、報告生成、Adapter 抽象
+Phase 5  ✅  智能化            — 知識圖譜、合規檢查、版本追蹤、智能提醒
 Phase 6  ⬜  協作與部署         — 多使用者、權限、Docker、CI/CD
 ```
 
@@ -59,11 +59,23 @@ Phase 6  ⬜  協作與部署         — 多使用者、權限、Docker、CI/CD
 └── tests/test_document_generator.py
 ```
 
-### 2.5.4 錯誤處理強化
+### 2.5.4 錯誤處理強化 ✅
 
-- LLM 呼叫增加 retry（exponential backoff）
-- 前端增加全域 error boundary
-- API 統一 error response 格式
+**實作**：
+```
+新增/修改檔案：
+├── app/llm/retry.py              # is_retryable() + @with_retry() (exponential backoff)
+├── app/schemas/error.py          # ErrorResponse + error code constants
+├── app/services/sse_pipeline.py  # SSE stream retry (1 retry for transient errors)
+├── app/services/intent_router.py # Graceful fallback to SKIP on LLM failure
+├── app/services/rag_pipeline.py  # Graceful fallback to [需人工補充] on LLM failure
+├── app/routers/forms.py          # Structured error responses
+├── app/routers/documents.py      # Structured error responses
+├── main.py                       # Global exception handler
+├── frontend/src/components/ErrorBoundary.tsx  # React Error Boundary
+├── frontend/src/api/client.ts    # ApiError with code + field parsing
+└── tests/test_llm_retry.py       # 18 tests
+```
 
 ---
 
@@ -151,24 +163,37 @@ id | file_path | file_hash | status      | chunks_count | last_indexed_at
 └── app/services/document_service.py    # 新增 extract_text_from_* 方法
 ```
 
-### 3.4 Entity 泛化
+### 3.4 Entity 泛化 ✅
 
 **問題**：目前 SQL 層只有 `UserProfile` + `EducationExperience`，太學術導向。
 
-**方案**：抽象為 `Entity` + `EntityAttribute` 模式，讓使用者自訂結構。
+**決策**：JSON `attributes_json` 欄位（非獨立 EntityAttribute 表）— "旁邊加" 策略，不替換現有 UserProfile。
 
 ```
-目前：                          泛化後：
-UserProfile                     Entity
-├── name_zh                     ├── entity_type: "person" | "org" | "project"
-├── name_en                     ├── name
-├── title                       └── attributes: JSON
-├── department                      ├── name_zh: "王小明"
-└── ...                             ├── title: "教授"
-                                    └── custom_field_1: "..."
+Entity ORM:
+├── entity_type: "person" | "organization" | "project" | custom
+├── name
+├── description
+└── attributes_json: JSON
+    ├── name_zh: "王小明"
+    ├── title: "教授"
+    └── custom_field: "..."
 ```
 
-**注意**：Phase 3 先做「旁邊加」而不是「替換掉」現有 UserProfile。新舊並存，Intent Router 自動判斷查哪個。
+**實作**：
+```
+新增/修改檔案：
+├── app/models/entity.py              # Entity ORM (JSON attributes, type-tagged)
+├── app/schemas/entity.py             # EntityCreate / EntityUpdate / EntityResponse
+├── app/services/entity_service.py    # Async CRUD + get_entity_attribute_names()
+├── app/routers/entities.py           # CRUD API /api/v1/users/{id}/entities
+├── app/services/intent_router.py     # entity_attribute_names 注入路由 prompt
+├── app/services/form_filler.py       # _merge_entity_attributes() + _get_sql_value() entities.* 支援
+├── frontend/src/types/entity.ts      # TypeScript types
+├── frontend/src/api/entities.ts      # API client
+├── frontend/src/pages/EntityPage.tsx  # CRUD UI + 動態屬性 + 類型篩選
+└── tests/test_entity.py              # 25 tests
+```
 
 ---
 
@@ -264,9 +289,9 @@ tests/test_sse_pipeline.py     ← 24 tests
 > 目標：從「被動查詢」進化到「主動洞察」
 > 預估：3-4 週
 
-### 5.1 知識圖譜 (Entity Relations)
+### 5.1 知識圖譜 (Entity Relations) ✅
 
-在 Entity 之間建立關聯：
+在 Entity 之間建立有向關聯：
 
 ```
 王教授 ──[作者]──→ 論文A
@@ -275,36 +300,122 @@ tests/test_sse_pipeline.py     ← 24 tests
 計畫B  ──[合作]──→ 李教授
 ```
 
-**技術選型**：SQLite + 關聯表（不需要 Neo4j），或考慮 `NetworkX` 做 in-memory graph。
+**技術選型**：SQLite `entity_relations` 關聯表（不需要 Neo4j）。前端用 `react-force-graph-2d` 力導向圖。
 
-### 5.2 合規檢查
-
-針對表單或文件，自動檢查是否符合規範：
-
+**實作**：
 ```
-規則引擎：
-├── 必填欄位是否都填了？
-├── 日期格式是否正確？
-├── 字數限制是否超過？
-└── 自訂規則（regex / LLM 判斷）
-```
-
-### 5.3 版本追蹤與差異比對
-
-追蹤同一份文件的多個版本：
-
-```
-計畫書_v1.docx → v2.docx → v3.docx
-           diff →     diff →
-      「新增了第三章」  「修改了預算表」
+新增/修改檔案：
+├── app/models/entity_relation.py          # EntityRelation ORM (user_id, from/to entity_id, relation_type, description)
+├── app/schemas/entity_relation.py         # CRUD schemas + GraphNode / GraphEdge / GraphData
+├── app/services/entity_relation_service.py # Async CRUD + graph queries (full_graph, neighbors, relation_types, cascade)
+├── app/routers/entity_relations.py        # 8 endpoints: CRUD + /types + /graph + /graph/{eid}
+├── app/routers/entities.py                # Cascade: delete entity → clean up relations
+├── tests/test_entity_relation.py          # 26 tests
+├── frontend/src/types/entityRelation.ts   # TypeScript types
+├── frontend/src/api/entityRelations.ts    # API client (CRUD + graph)
+├── frontend/src/pages/KnowledgeGraphPage.tsx   # Force-directed graph + filters + side panel
+└── frontend/src/components/AddRelationModal.tsx # Create relation dialog + direction preview
 ```
 
-### 5.4 智能提醒
+**API 端點**：
+- `POST/GET/PUT/DELETE /api/v1/users/{id}/entity-relations/` — CRUD
+- `GET /types` — 關係類型列表
+- `GET /graph` — 完整圖譜（所有 entities + relations）
+- `GET /graph/{entity_id}` — 1-hop 鄰居子圖
 
-基於知識庫內容主動提醒：
+**前端功能**：
+- 力導向圖（節點按 entity_type 色碼：藍=人員、綠=組織、紫=專案）
+- 有向箭頭邊 + hover 顯示 relation_type
+- 實體類型 + 關係類型雙篩選
+- 點擊節點：側面板顯示名稱、描述、出入關聯（含刪除按鈕）
+- 新增關係對話框（既有類型建議 datalist + 方向預覽）
 
-- 「你的 MOST 計畫書下個月到期」
-- 「這份表單有 3 個欄位跟上次填的不一樣，要確認嗎？」
+### 5.2 合規檢查 ✅
+
+針對表單填寫結果，自動檢查是否符合自訂規範：
+
+**規則引擎（5 種規則類型）**：
+- `required` — 必填欄位是否已填（排除 `[需人工補充]`）
+- `min_length` / `max_length` — 字數限制檢查
+- `regex` — 正規表達式驗證（如日期格式、email）
+- `contains` — 內容必須包含指定關鍵字
+
+**嚴重等級**：`error`（紅）/ `warning`（黃）/ `info`（藍）
+
+**欄位匹配**：fnmatch glob 模式（`*` 全匹配、`name_*` 前綴匹配）
+
+```
+新增/修改檔案：
+├── app/models/compliance_rule.py          # ComplianceRule ORM
+├── app/schemas/compliance.py              # CRUD schemas + Violation + CheckResult
+├── app/services/compliance_service.py     # Rule CRUD + validation engine
+├── app/routers/compliance.py              # CRUD + /check/{job_id}
+├── tests/test_compliance.py               # 33 tests
+├── frontend/src/types/compliance.ts       # TypeScript types
+├── frontend/src/api/compliance.ts         # API client
+└── frontend/src/pages/CompliancePage.tsx   # Rule management UI
+```
+
+**API 端點**：
+- `POST/GET/PUT/DELETE /api/v1/users/{id}/compliance-rules/` — CRUD
+- `POST /check/{job_id}` — 執行合規檢查（回傳 violations + pass/fail）
+
+### 5.3 版本追蹤與差異比對 ✅
+
+追蹤同一份文件的多個版本，支援行級差異比對：
+
+```
+計畫書.docx  v1 → v2 → v3
+              diff →  diff →
+         「修改了 5 行」 「新增了 3 行」
+```
+
+**Diff 引擎**：`difflib.SequenceMatcher`，支援 context lines、hunks 分組、增刪改統計。
+
+```
+新增/修改檔案：
+├── app/models/document_version.py         # DocumentVersion ORM (version_number auto-increment)
+├── app/schemas/version.py                 # Response + DiffLine + DiffHunk + DiffResult
+├── app/services/version_service.py        # CRUD + compute_diff + list_tracked_files
+├── app/routers/versions.py                # CRUD + /files + /diff/{old}/{new}
+├── tests/test_version_tracking.py         # 15 tests
+├── frontend/src/types/version.ts          # TypeScript types
+├── frontend/src/api/versions.ts           # API client
+└── frontend/src/pages/VersionPage.tsx      # File sidebar + version history + side-by-side diff viewer
+```
+
+**API 端點**：
+- `GET/PUT/DELETE /api/v1/users/{id}/versions/` — CRUD
+- `GET /files` — 追蹤檔案列表（含版本數摘要）
+- `GET /diff/{old_version_id}/{new_version_id}` — 行級差異比對
+
+### 5.4 智能提醒 ✅
+
+基於知識庫內容主動提醒，支援三種提醒類型：
+
+- **deadline** — 截止日期偵測（regex 日期 + 關鍵字匹配）
+- **fill_diff** — 填寫差異提醒（同模板前後填寫比對）
+- **manual** — 使用者自訂提醒
+
+**日期偵測**：支援 `YYYY/MM/DD`、`YYYY年MM月DD日`、`MM/DD/YYYY` 格式，搭配截止/期限/到期等關鍵字。
+
+```
+新增/修改檔案：
+├── app/models/reminder.py                 # Reminder ORM (type, status, priority, due_date)
+├── app/schemas/reminder.py                # CRUD schemas + FillDiffItem + FillDiffResult
+├── app/services/reminder_service.py       # CRUD + fill-diff + deadline scanning
+├── app/routers/reminders.py               # CRUD + /count + /dismiss-all + /fill-diff/{job_id}
+├── tests/test_reminders.py                # 32 tests
+├── frontend/src/types/reminder.ts         # TypeScript types
+├── frontend/src/api/reminders.ts          # API client
+└── frontend/src/pages/ReminderPage.tsx     # Reminder list + filters + priority colors + add form
+```
+
+**API 端點**：
+- `POST/GET/PUT/DELETE /api/v1/users/{id}/reminders/` — CRUD
+- `GET /count` — 未讀提醒數量
+- `POST /dismiss-all` — 批次忽略
+- `GET /fill-diff/{job_id}` — 填寫差異比對
 
 ---
 
@@ -356,6 +467,11 @@ services:
 | 前端 | React + Tailwind | 生態系最大、CSS utility-first | Vue, Svelte |
 | 檔案監控 | watchdog | Python 跨平台標準 | inotify, polling |
 | 任務佇列 | asyncio.Task | 輕量、不需額外 infra | Celery, Dramatiq（Phase 6 考慮） |
+| 圖譜視覺化 | react-force-graph-2d | 輕量 (~50KB)、React 原生、Canvas 渲染 | D3.js, vis-network, Cytoscape.js |
+| 圖譜儲存 | SQLite 關聯表 | 足夠簡單、與現有 DB 一致 | Neo4j, NetworkX |
+| Diff 引擎 | difflib.SequenceMatcher | Python 標準庫、行級精度夠用 | google-diff-match-patch, Myers |
+| 規則匹配 | fnmatch glob | 簡單直觀、無需學 regex | 完整 regex、JSONPath |
+| 日期偵測 | regex + 關鍵字 | 輕量、不需 NLP 依賴 | dateutil.parser, spaCy NER |
 
 ---
 
@@ -365,22 +481,17 @@ services:
 2026 Q1 (已完成)
   ✅ Phase 1: Backend MVP
   ✅ Phase 2: Frontend MVP
-  ✅ Phase 2.5: 收尾補強（Job Store + PDF 填寫 + 測試補齊）
-  ✅ Phase 3.1-3.4: 知識引擎（監控 + 增量索引 + API/UI + 多格式）
-  ✅ Phase 4.1: Chat 問答（SSE streaming）
-  ✅ Phase 4.2: 郵件草稿生成
-  ✅ Phase 4.3: 報告生成（結構化大綱 + 3 種報告類型 + SSE 串流）
+  ✅ Phase 2.5: 收尾補強（Job Store + PDF 填寫 + 測試補齊 + 錯誤處理）
+  ✅ Phase 3: 知識引擎（監控 + 增量索引 + API/UI + 多格式 + Entity 泛化）
+  ✅ Phase 4: 多輸出適配器（Chat + Email + Report + SSE pipeline 抽象）
 
 2026 Q2
-  ⬜ Phase 3.5: Entity 泛化 (1-2 週)
-  ✅ Phase 4.4: Output Adapter 抽象（函式組合 + sse_pipeline 共用管線）
-  ⬜ Phase 2.5.4: 錯誤處理強化 (1 週)
+  ✅ Phase 5.1: 知識圖譜（EntityRelation + react-force-graph-2d）
+  ✅ Phase 5.2: 合規檢查（Rule Engine + 5 種驗證 + fnmatch 模式匹配）
+  ✅ Phase 5.3: 版本追蹤（DocumentVersion + difflib 行級差異 + side-by-side viewer）
+  ✅ Phase 5.4: 智能提醒（deadline 偵測 + fill-diff + 優先順序 + 篩選 UI）
 
 2026 Q3
-  ⬜ Phase 5.1-5.2: 知識圖譜 + 合規檢查 (3-4 週)
-
-2026 Q4
-  ⬜ Phase 5.3-5.4: 版本追蹤 + 智能提醒 (2-3 週)
   ⬜ Phase 6: 協作與部署 (4-6 週)
 ```
 

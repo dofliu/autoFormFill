@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.form import FieldFillResult, FormFillResponse
-from app.services import document_generator, form_parser, user_service
+from app.services import document_generator, entity_service, form_parser, user_service
 from app.services.intent_router import route_fields
 from app.services.rag_pipeline import generate_field_content
 from app.job_store import job_store
@@ -25,13 +25,20 @@ async def fill_form(
     if not fields:
         raise ValueError("No fillable fields detected in the document.")
 
-    # Step 2: Route fields to data sources via LLM
-    routing = await route_fields(fields)
+    # Step 2: Load entity attribute names for routing prompt
+    entity_attr_names = await entity_service.get_entity_attribute_names(db, user_id)
 
-    # Step 3: Fetch data for each field
+    # Step 3: Route fields to data sources via LLM
+    routing = await route_fields(fields, entity_attribute_names=entity_attr_names or None)
+
+    # Step 4: Fetch data for each field
     user = await user_service.get_user(db, user_id)
     if not user:
         raise ValueError(f"User {user_id} not found.")
+
+    # Merge entity attributes into a flat lookup dict
+    entities = await entity_service.list_entities(db, user_id)
+    entity_attrs = _merge_entity_attributes(entities)
 
     fill_data: dict[str, str] = {}
     results: list[FieldFillResult] = []
@@ -52,7 +59,7 @@ async def fill_form(
             continue
 
         if route.data_source == "SQL_DB" and route.sql_target:
-            value = _get_sql_value(user, route.sql_target)
+            value = _get_sql_value(user, route.sql_target, entity_attrs)
             fill_data[field_name] = value
             results.append(
                 FieldFillResult(
@@ -89,7 +96,7 @@ async def fill_form(
                 )
             )
 
-    # Step 4: Generate filled document
+    # Step 5: Generate filled document
     output_path = document_generator.generate_filled_document(
         file_path, file_type, fill_data
     )
@@ -120,12 +127,39 @@ async def fill_form(
     )
 
 
-def _get_sql_value(user, sql_target: str) -> str:
-    """Extract a value from the user profile based on sql_target like 'user_profiles.name_zh'."""
+def _merge_entity_attributes(entities) -> dict[str, str]:
+    """Flatten all entity attributes into one dict.
+
+    Most recently updated entity wins on key conflict (entities are already
+    sorted by updated_at desc from the service layer).
+    """
+    merged: dict[str, str] = {}
+    # Iterate in reverse so that the most recently updated entity overwrites
+    for entity in reversed(entities):
+        merged.update(entity.attributes)
+    return merged
+
+
+def _get_sql_value(user, sql_target: str, entity_attrs: dict[str, str] | None = None) -> str:
+    """Extract a value from user profile or entity attributes.
+
+    sql_target formats:
+    - ``user_profiles.name_zh`` → UserProfile attribute
+    - ``entities.key``          → entity attribute lookup
+    """
     parts = sql_target.split(".")
+    table = parts[0] if len(parts) >= 2 else ""
     column = parts[-1] if len(parts) >= 2 else parts[0]
 
-    # Map column names to UserProfile attributes
+    # Entity attributes
+    if table == "entities":
+        if entity_attrs:
+            value = entity_attrs.get(column)
+            if value is not None:
+                return str(value)
+        return "[需人工補充]"
+
+    # UserProfile attributes (default path)
     value = getattr(user, column, None)
     if value is None:
         return "[需人工補充]"

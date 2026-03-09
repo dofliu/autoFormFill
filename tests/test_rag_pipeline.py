@@ -480,16 +480,18 @@ class TestGenerateFieldContentErrors:
                 await generate_field_content("f", "q")
 
     @pytest.mark.asyncio
-    async def test_llm_error_propagates(self):
-        """If LLM adapter raises, it should propagate."""
+    async def test_llm_error_falls_back_to_placeholder(self):
+        """If LLM adapter raises, should return [需人工補充] fallback."""
         results = [_search_result("Long enough text for context processing in the pipeline.")]
         adapter = MagicMock()
         adapter.generate_text = AsyncMock(side_effect=RuntimeError("LLM timeout"))
 
         with patch("app.services.rag_pipeline.search_documents", new_callable=AsyncMock, return_value=results), \
              patch("app.services.rag_pipeline.get_llm_adapter", return_value=adapter):
-            with pytest.raises(RuntimeError, match="LLM timeout"):
-                await generate_field_content("f", "q")
+            text, confidence = await generate_field_content("f", "q")
+
+        assert text == "[需人工補充]"
+        assert confidence == 0.0
 
 
 # ---------------------------------------------------------------------------

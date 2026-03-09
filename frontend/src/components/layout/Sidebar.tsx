@@ -8,7 +8,12 @@ const navItems = [
   { to: "/report", label: "報告生成", icon: "📊" },
   { to: "/history", label: "填寫歷史", icon: "📋" },
   { to: "/profile", label: "個人資料", icon: "👤" },
+  { to: "/entities", label: "實體管理", icon: "🏷️" },
+  { to: "/graph", label: "知識圖譜", icon: "🕸️" },
   { to: "/knowledge", label: "知識庫", icon: "📚" },
+  { to: "/compliance", label: "合規檢查", icon: "✅" },
+  { to: "/versions", label: "版本追蹤", icon: "📄" },
+  { to: "/reminders", label: "智能提醒", icon: "🔔" },
   { to: "/indexing", label: "自動索引", icon: "🔍" },
 ];
 

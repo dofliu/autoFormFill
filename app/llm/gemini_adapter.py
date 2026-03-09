@@ -6,6 +6,7 @@ from google.genai import types
 
 from app.config import settings
 from app.llm.base import LLMAdapter
+from app.llm.retry import with_retry
 
 
 class GeminiAdapter(LLMAdapter):
@@ -14,6 +15,7 @@ class GeminiAdapter(LLMAdapter):
         self.model = settings.gemini_model
         self.embed_model = settings.gemini_embedding_model
 
+    @with_retry()
     async def generate_text(self, prompt: str, **kwargs) -> str:
         response = await self.client.aio.models.generate_content(
             model=self.model,
@@ -40,6 +42,7 @@ class GeminiAdapter(LLMAdapter):
             if chunk.text:
                 yield chunk.text
 
+    @with_retry()
     async def generate_json(
         self, prompt: str, schema: dict | None = None
     ) -> dict | list:

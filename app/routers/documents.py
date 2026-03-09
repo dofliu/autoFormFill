@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Literal
 
@@ -5,8 +6,11 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.config import settings
 from app.schemas.document import DocumentUploadResponse
+from app.schemas.error import ERR_FILE_UNSUPPORTED, ERR_INTERNAL
 from app.services import document_service
 from app.utils.file_utils import detect_file_type, save_upload_file
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/documents", tags=["Documents"])
 
@@ -27,7 +31,10 @@ async def upload_document(
     """Upload a document (paper or project), extract text, chunk, embed, and store."""
     file_type = detect_file_type(file.filename or "")
     if file_type == "unknown":
-        raise HTTPException(status_code=400, detail="Unsupported file type. Use .docx or .pdf")
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": "Unsupported file type. Use .docx or .pdf", "code": ERR_FILE_UNSUPPORTED, "field": "file"},
+        )
 
     file_path = await save_upload_file(file, settings.upload_dir)
     try:
@@ -47,7 +54,11 @@ async def upload_document(
         result = await document_service.embed_and_store(file_path, file_type, metadata)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Document upload failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"detail": str(e), "code": ERR_INTERNAL},
+        )
     finally:
         if os.path.exists(file_path):
             os.unlink(file_path)
@@ -64,4 +75,8 @@ async def search_documents(
         results = await document_service.search_documents(q, collection, n_results)
         return {"query": q, "collection": collection, "results": results}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Document search failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"detail": str(e), "code": ERR_INTERNAL},
+        )

@@ -1,6 +1,6 @@
 # SmartFill-Scholar — 任務追蹤
 
-> 最後更新：2026-03-09
+> 最後更新：2026-03-12
 > 使用方式：完成任務後將 `[ ]` 改為 `[x]`，git commit 即可追蹤進度
 
 ---
@@ -52,10 +52,14 @@
 - [x] `tests/test_rag_pipeline.py` — Mock LLM + ChromaDB（生成 + 縮短 + 幻覺防護 + 信心度，33 tests）
 - [x] `tests/test_document_generator.py` — 模板填寫測試（PDF + DOCX，12 tests）
 
-### 錯誤處理 `P2`
-- [ ] LLM 呼叫增加 retry (exponential backoff)
-- [ ] 前端增加全域 Error Boundary
-- [ ] API 統一 error response 格式 `{ detail, code, field? }`
+### 錯誤處理 `P2` ✅
+- [x] LLM 呼叫增加 retry (exponential backoff) — `app/llm/retry.py` (`is_retryable()` + `@with_retry()`)
+- [x] 前端增加全域 Error Boundary — `frontend/src/components/ErrorBoundary.tsx`
+- [x] API 統一 error response 格式 `{ detail, code, field? }` — `app/schemas/error.py` + routers + `main.py` global handler
+- [x] SSE 串流 retry（一次重試 transient errors） — `app/services/sse_pipeline.py`
+- [x] Intent Router / RAG Pipeline 優雅降級（SKIP / `[需人工補充]` fallback）
+- [x] 前端 API client 支援結構化 error parsing — `frontend/src/api/client.ts`
+- [x] 新增 `tests/test_llm_retry.py`（18 tests — retry 邏輯 + fallback + SSE retry + ErrorResponse）
 
 ---
 
@@ -102,11 +106,17 @@
 - [x] `config.py` 更新 `SUPPORTED_EXTENSIONS` 預設值加入 `.pptx,.xlsx`
 - [x] 新增 `tests/test_multi_format.py`（29 tests — 檔案偵測 + PPTX 解析 + XLSX 解析 + dispatcher + config）
 
-### 3.5 Entity 泛化（評估） `P2`
-- [ ] 設計 `Entity` + `EntityAttribute` schema
-- [ ] 評估是否新建表 or 擴展現有 UserProfile
-- [ ] 更新 Intent Router 支援泛化 Entity 查詢
-- [ ] 決策記錄寫入 `docs/ROADMAP.md`
+### 3.5 Entity 泛化 `P2` ✅
+- [x] 設計 Entity ORM 模型 — JSON attributes 欄位（`app/models/entity.py`）
+- [x] 決策：JSON attributes_json 欄位（非獨立 EntityAttribute 表）— "旁邊加" 策略
+- [x] Entity Pydantic schemas（Create / Update / Response） — `app/schemas/entity.py`
+- [x] Entity async CRUD service + attribute names aggregation — `app/services/entity_service.py`
+- [x] Entity CRUD router（`/api/v1/users/{user_id}/entities`） — `app/routers/entities.py`
+- [x] Intent Router 整合：`entity_attribute_names` 參數注入路由 prompt
+- [x] Form Filler 整合：載入 entities、`_merge_entity_attributes()`、`_get_sql_value()` 支援 `entities.*`
+- [x] 前端：EntityPage（列表 + 篩選 + CRUD + 動態屬性編輯） — `frontend/src/pages/EntityPage.tsx`
+- [x] 前端：Entity types + API client — `frontend/src/types/entity.ts` + `frontend/src/api/entities.ts`
+- [x] 新增 `tests/test_entity.py`（25 tests — model + schema + service + form filler + intent router）
 
 ---
 
@@ -154,30 +164,88 @@
 
 ---
 
-## Phase 5 — 智能化
+## Phase 5 — 智能化 ✅
 
 > 依賴：Phase 4.1 完成
 > 參考：`docs/ROADMAP.md` Phase 5 章節
 
-### 5.1 知識圖譜 `P1`
-- [ ] 設計 Entity Relation 資料模型
-- [ ] 新增關聯 API endpoints
-- [ ] 前端新增圖譜視覺化（D3.js / vis-network）
+### 5.1 知識圖譜 `P1` ✅
+- [x] 設計 `EntityRelation` ORM 模型（`app/models/entity_relation.py`）
+  - 欄位：id, user_id, from_entity_id, to_entity_id, relation_type, description, timestamps
+- [x] Pydantic schemas（Create / Update / Response / GraphNode / GraphEdge / GraphData）— `app/schemas/entity_relation.py`
+- [x] Entity Relation async CRUD service + graph query helpers — `app/services/entity_relation_service.py`
+  - CRUD: create / get / list / update / delete / delete_relations_for_entity
+  - Graph: get_full_graph / get_neighbors / get_relation_types
+- [x] Entity Relations CRUD + Graph API router — `app/routers/entity_relations.py`
+  - `POST/GET/PUT/DELETE /api/v1/users/{user_id}/entity-relations/`
+  - `GET /types` — distinct relation types
+  - `GET /graph` — full graph data
+  - `GET /graph/{entity_id}` — 1-hop neighbor subgraph
+  - 驗證：self-reference 拒絕 + entity ownership check
+- [x] Cascade delete integration — `app/routers/entities.py` 刪除 entity 時清理所有關聯
+- [x] 新增 `tests/test_entity_relation.py`（26 tests — model + schema + service + graph queries + router）
+- [x] 前端新增 `KnowledgeGraphPage.tsx`（react-force-graph-2d 力導向圖 + 節點色碼 + 篩選 + 側面板）
+- [x] 前端新增 `AddRelationModal.tsx`（建立關係對話框 + 方向指示 + 既有類型建議）
+- [x] 前端 types + API client — `entityRelation.ts` + `entityRelations.ts`
+- [x] Sidebar 加入知識圖譜入口（🕸️ 知識圖譜）+ EntityPage 加入圖譜交叉連結
 
-### 5.2 合規檢查 `P2`
-- [ ] 設計 Rule Engine 架構
-- [ ] 必填欄位 / 格式 / 字數自動檢查
-- [ ] 前端 warning indicators
+### 5.2 合規檢查 `P2` ✅
+- [x] 設計 `ComplianceRule` ORM 模型（`app/models/compliance_rule.py`）
+  - 欄位：id, user_id, rule_name, field_pattern, rule_type, rule_value, severity, message, is_active, timestamps
+- [x] Pydantic schemas（Create / Update / Response / ComplianceViolation / ComplianceCheckResult）— `app/schemas/compliance.py`
+- [x] Compliance service — `app/services/compliance_service.py`
+  - Rule CRUD: create / get / list / update / delete
+  - Validation engine: 5 種規則類型（required, min_length, max_length, regex, contains）
+  - fnmatch glob 模式欄位匹配（`field_pattern`）
+  - 3 種嚴重等級（error / warning / info）
+- [x] Compliance CRUD + check API router — `app/routers/compliance.py`
+  - `POST/GET/PUT/DELETE /api/v1/users/{user_id}/compliance-rules/`
+  - `POST /check/{job_id}` — 執行合規檢查
+- [x] 前端新增 `CompliancePage.tsx`（規則管理 + 新增表單 + 開關切換 + 嚴重等級色碼）
+- [x] 前端 types + API client — `compliance.ts` + `compliance.ts`
+- [x] Sidebar 加入合規檢查入口（✅ 合規檢查）
+- [x] 新增 `tests/test_compliance.py`（33 tests — model + schema + field match + rule check + compliance engine + router）
 
-### 5.3 版本追蹤 `P2`
-- [ ] Document versioning 資料模型
-- [ ] Diff engine (text-based)
-- [ ] 前端 diff viewer
+### 5.3 版本追蹤 `P2` ✅
+- [x] 設計 `DocumentVersion` ORM 模型（`app/models/document_version.py`）
+  - 欄位：id, user_id, file_path, file_hash, version_number, content_text, content_length, label, created_at
+- [x] Pydantic schemas（Response / Update / DiffLine / DiffHunk / DiffResult）— `app/schemas/version.py`
+- [x] Version service — `app/services/version_service.py`
+  - CRUD: create / get / list / update / delete
+  - `list_tracked_files()` — 檔案分組摘要（版本數 + 最新版）
+  - `compute_diff()` — 行級統一差異（`difflib.SequenceMatcher` + context lines + hunks）
+  - `diff_versions()` — 載入兩版本 + 計算差異
+- [x] Version CRUD + diff API router — `app/routers/versions.py`
+  - `GET/PUT/DELETE /api/v1/users/{user_id}/versions/`
+  - `GET /files` — 追蹤檔案列表
+  - `GET /diff/{old_id}/{new_id}` — 版本差異比較
+- [x] 前端新增 `VersionPage.tsx`（檔案側欄 + 版本歷史 + 並排 diff viewer + 色碼標記）
+- [x] 前端 types + API client — `version.ts` + `versions.ts`
+- [x] Sidebar 加入版本追蹤入口（📄 版本追蹤）
+- [x] 新增 `tests/test_version_tracking.py`（15 tests — model + schema + diff engine + service + router）
 
-### 5.4 智能提醒 `P3`
-- [ ] 截止日期偵測
-- [ ] 填寫差異提醒
-- [ ] 通知系統（in-app）
+### 5.4 智能提醒 `P3` ✅
+- [x] 設計 `Reminder` ORM 模型（`app/models/reminder.py`）
+  - 欄位：id, user_id, reminder_type, title, message, related_id, status, priority, due_date, timestamps
+  - 3 種提醒類型：deadline / fill_diff / manual
+  - 3 種狀態：active / read / dismissed
+  - 3 種優先順序：high / medium / low
+- [x] Pydantic schemas（Create / Update / Response / FillDiffItem / FillDiffResult）— `app/schemas/reminder.py`
+- [x] Reminder service — `app/services/reminder_service.py`
+  - CRUD: create / get / list / update / delete / count_active / dismiss_all
+  - `compute_fill_diffs()` — 比較新舊填寫結果
+  - `detect_fill_diffs()` — 載入同模板上次填寫結果進行比對
+  - `extract_dates_from_text()` — regex 日期偵測（YYYY/MM/DD + 中文日期 + MM/DD/YYYY）
+  - `scan_for_deadlines()` — 掃描文本建立截止日提醒
+- [x] Reminder CRUD + notification API router — `app/routers/reminders.py`
+  - `POST/GET/PUT/DELETE /api/v1/users/{user_id}/reminders/`
+  - `GET /count` — 未讀提醒數量
+  - `POST /dismiss-all` — 批次忽略所有活躍提醒
+  - `GET /fill-diff/{job_id}` — 填寫差異比對
+- [x] 前端新增 `ReminderPage.tsx`（提醒列表 + 篩選標籤 + 優先順序色碼 + 類型圖示 + 新增表單）
+- [x] 前端 types + API client — `reminder.ts` + `reminders.ts`
+- [x] Sidebar 加入智能提醒入口（🔔 智能提醒）
+- [x] 新增 `tests/test_reminders.py`（32 tests — model + schema + fill diff + date extraction + service + constants）
 
 ---
 

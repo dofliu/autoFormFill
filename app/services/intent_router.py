@@ -1,7 +1,10 @@
 import json
+import logging
 
 from app.llm.factory import get_llm_adapter
 from app.schemas.form import FieldRoutingResult, FormField
+
+logger = logging.getLogger(__name__)
 
 ROUTING_PROMPT = """You are a field classifier for an academic form-filling system.
 
@@ -30,8 +33,17 @@ Respond as a JSON array. Each element must have:
 """
 
 
-async def route_fields(fields: list[FormField]) -> list[FieldRoutingResult]:
-    """Use LLM to classify each form field into its data source."""
+async def route_fields(
+    fields: list[FormField],
+    entity_attribute_names: list[str] | None = None,
+) -> list[FieldRoutingResult]:
+    """Use LLM to classify each form field into its data source.
+
+    Args:
+        fields: Form fields to classify.
+        entity_attribute_names: If provided, injects available entity attribute
+            keys into the prompt so the router can map fields to ``entities.<key>``.
+    """
     if not fields:
         return []
 
@@ -40,8 +52,33 @@ async def route_fields(fields: list[FormField]) -> list[FieldRoutingResult]:
     )
     prompt = ROUTING_PROMPT.format(fields_json=fields_json)
 
+    # Inject entity attributes into prompt when available
+    if entity_attribute_names:
+        entity_hint = (
+            "\n  Available entity attributes (use sql_target = \"entities.<key>\"): "
+            + ", ".join(entity_attribute_names)
+        )
+        prompt = prompt.replace(
+            "  Available columns in education_experiences:",
+            entity_hint + "\n  Available columns in education_experiences:",
+        )
+
     adapter = get_llm_adapter()
-    result = await adapter.generate_json(prompt)
+    try:
+        result = await adapter.generate_json(prompt)
+    except Exception as e:
+        logger.warning(
+            "Intent routing LLM call failed: %s. Falling back to SKIP for all %d fields.",
+            e, len(fields),
+        )
+        return [
+            FieldRoutingResult(
+                field_name=f.field_name,
+                data_source="SKIP",
+                confidence=0.0,
+            )
+            for f in fields
+        ]
 
     routing_results = []
     for item in result:

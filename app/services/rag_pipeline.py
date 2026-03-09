@@ -1,5 +1,9 @@
+import logging
+
 from app.llm.factory import get_llm_adapter
 from app.services.document_service import search_documents
+
+logger = logging.getLogger(__name__)
 
 GENERATION_PROMPT = """Based on the following academic documents, generate content for
 the form field "{field_name}".
@@ -57,7 +61,11 @@ async def generate_field_content(
     )
 
     adapter = get_llm_adapter()
-    generated = await adapter.generate_text(prompt, temperature=0.3)
+    try:
+        generated = await adapter.generate_text(prompt, temperature=0.3)
+    except Exception as e:
+        logger.warning("RAG generation failed for field '%s': %s", field_name, e)
+        return "[需人工補充]", 0.0
 
     # Step 4: Self-correction — enforce length constraint
     if len(generated) > max_length:
@@ -65,7 +73,10 @@ async def generate_field_content(
             f"Shorten the following text to under {max_length} characters "
             f"while preserving key information. Language: {language}\n\n{generated}"
         )
-        generated = await adapter.generate_text(shorten_prompt, temperature=0.1)
+        try:
+            generated = await adapter.generate_text(shorten_prompt, temperature=0.1)
+        except Exception as e:
+            logger.warning("RAG shorten failed for field '%s': %s", field_name, e)
 
     # Step 5: Hallucination guard — basic check
     generated = _hallucination_check(generated, context_chunks)

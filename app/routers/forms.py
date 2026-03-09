@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -7,10 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
+from app.schemas.error import ERR_FILE_UNSUPPORTED, ERR_INTERNAL, ERR_LLM_UNAVAILABLE, ERR_NOT_FOUND, ERR_VALIDATION
 from app.schemas.form import FormFillResponse, FormParseResponse, FormPreviewResponse, FormSubmitRequest, FieldFillResult
 from app.services import form_parser
 from app.utils.file_utils import detect_file_type, save_upload_file
 from app.job_store import job_store
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/forms", tags=["Forms"])
 
@@ -20,7 +24,10 @@ async def parse_form(file: UploadFile = File(...)):
     """Upload a blank form and detect fillable fields."""
     file_type = detect_file_type(file.filename or "")
     if file_type == "unknown":
-        raise HTTPException(status_code=400, detail="Unsupported file type. Use .docx or .pdf")
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": "Unsupported file type. Use .docx or .pdf", "code": ERR_FILE_UNSUPPORTED, "field": "file"},
+        )
 
     file_path = await save_upload_file(file, settings.upload_dir)
     try:
@@ -32,7 +39,11 @@ async def parse_form(file: UploadFile = File(...)):
             total_fields=len(fields),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Form parse failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"detail": str(e), "code": ERR_INTERNAL},
+        )
     finally:
         if os.path.exists(file_path):
             os.unlink(file_path)
@@ -47,7 +58,10 @@ async def fill_form(
     """Upload a form, auto-fill using user data + RAG, return filled document."""
     file_type = detect_file_type(file.filename or "")
     if file_type == "unknown":
-        raise HTTPException(status_code=400, detail="Unsupported file type. Use .docx or .pdf")
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": "Unsupported file type. Use .docx or .pdf", "code": ERR_FILE_UNSUPPORTED, "field": "file"},
+        )
 
     file_path = await save_upload_file(file, settings.upload_dir)
     try:
@@ -61,10 +75,18 @@ async def fill_form(
             db=db,
         )
         return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": str(e), "code": ERR_VALIDATION},
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Form fill failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"detail": str(e), "code": ERR_INTERNAL},
+        )
     finally:
-        # Keep the uploaded file for reference; form_filler handles cleanup if needed
         if os.path.exists(file_path):
             os.unlink(file_path)
 
@@ -74,7 +96,10 @@ async def download_filled_form(filename: str):
     """Download a filled form by filename."""
     file_path = os.path.join(settings.output_dir, filename)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "File not found", "code": ERR_NOT_FOUND, "field": "filename"},
+        )
     return FileResponse(
         file_path,
         filename=filename,
@@ -87,7 +112,10 @@ async def get_form_preview(job_id: str, db: AsyncSession = Depends(get_db)):
     """Get form preview data for a job."""
     job = await job_store.get_job(job_id, db)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Job not found", "code": ERR_NOT_FOUND, "field": "job_id"},
+        )
 
     return FormPreviewResponse(
         job_id=job_id,
@@ -113,9 +141,16 @@ async def submit_form(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": str(e), "code": ERR_NOT_FOUND},
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Form submit failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"detail": str(e), "code": ERR_INTERNAL},
+        )
 
 
 class FormHistoryItem(BaseModel):

@@ -348,11 +348,14 @@ class TestRouteFieldsEdgeCases:
         assert result[1].confidence == 0.0
 
     @pytest.mark.asyncio
-    async def test_llm_error_propagates(self):
-        """If LLM adapter raises, the error should propagate."""
+    async def test_llm_error_falls_back_to_skip(self):
+        """If LLM adapter raises, all fields should fall back to SKIP."""
         adapter = MagicMock()
         adapter.generate_json = AsyncMock(side_effect=RuntimeError("LLM timeout"))
 
         with patch("app.services.intent_router.get_llm_adapter", return_value=adapter):
-            with pytest.raises(RuntimeError, match="LLM timeout"):
-                await route_fields([_field("name")])
+            result = await route_fields([_field("name"), _field("email")])
+
+        assert len(result) == 2
+        assert all(r.data_source == "SKIP" for r in result)
+        assert all(r.confidence == 0.0 for r in result)

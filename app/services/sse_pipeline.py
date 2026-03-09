@@ -16,6 +16,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 
 from app.llm.factory import get_llm_adapter
+from app.llm.retry import is_retryable
 from app.schemas.chat import SourceChunk
 from app.services.document_service import search_documents
 from app.vector_store import COLLECTIONS
@@ -170,17 +171,24 @@ async def rag_sse_stream(
     # 3. Build prompt using caller's builder
     prompt = build_prompt(sources)
 
-    # 4. Stream LLM response
+    # 4. Stream LLM response (with one retry for transient errors)
     adapter = get_llm_adapter()
-    try:
-        async for chunk in adapter.generate_text_stream(
-            prompt, temperature=config.temperature, max_tokens=config.max_tokens
-        ):
-            yield _sse({"type": "chunk", "content": chunk})
-    except Exception as e:
-        logger.error("LLM streaming failed: %s", e)
-        yield _sse({"type": "error", "message": str(e)})
-        return
+    max_stream_attempts = 2
+    for attempt in range(max_stream_attempts):
+        try:
+            async for chunk in adapter.generate_text_stream(
+                prompt, temperature=config.temperature, max_tokens=config.max_tokens
+            ):
+                yield _sse({"type": "chunk", "content": chunk})
+            break  # success — exit retry loop
+        except Exception as e:
+            if attempt < max_stream_attempts - 1 and is_retryable(e):
+                logger.warning("LLM stream failed (attempt %d), retrying: %s", attempt + 1, e)
+                await asyncio.sleep(1.0)
+                continue
+            logger.error("LLM streaming failed: %s", e)
+            yield _sse({"type": "error", "message": str(e)})
+            return
 
     # 5. Done signal
     yield _sse({"type": "done"})

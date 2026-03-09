@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     auto_index_collection: str = "auto_indexed"  # ChromaDB collection for auto-indexed files
     supported_extensions: str = ".docx,.pdf,.txt,.md,.pptx,.xlsx"  # File extensions to index
 
+    # Phase 2.5.4: LLM retry
+    llm_max_retries: int = 3  # Max retry attempts for transient LLM errors
+    llm_timeout: float = 60.0  # Per-call timeout in seconds
+    llm_retry_base_delay: float = 1.0  # Base delay for exponential backoff (seconds)
+
     # Phase 4: Chat
     chat_context_rounds: int = 5  # Number of conversation rounds to keep as LLM context
 
