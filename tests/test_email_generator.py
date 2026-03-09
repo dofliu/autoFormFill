@@ -187,8 +187,8 @@ class TestEmailDraftStreamEvents:
         mock_chunks = ["Dear ", "Prof. Wang,\n\n", "I hope this email finds you well."]
         adapter = _mock_adapter(mock_chunks)
 
-        with patch("app.services.email_generator.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             events = await _collect_events(
                 email_draft_stream(
                     recipient_name="Prof. Wang",
@@ -214,8 +214,8 @@ class TestEmailDraftStreamEvents:
         ]
         adapter = _mock_adapter(["Email body here."])
 
-        with patch("app.services.email_generator.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             events = await _collect_events(
                 email_draft_stream(
                     recipient_name="Test",
@@ -236,8 +236,8 @@ class TestEmailDraftStreamEvents:
         mock_sources = [_source("Context text for generation.")]
         adapter = _mock_adapter(["Hello ", "World"])
 
-        with patch("app.services.email_generator.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             events = await _collect_events(
                 email_draft_stream(
                     recipient_name="Test",
@@ -256,8 +256,8 @@ class TestEmailDraftStreamEvents:
         """Even with no search results, should still attempt generation."""
         adapter = _mock_adapter(["Draft without context."])
 
-        with patch("app.services.email_generator.search_all_collections", new_callable=AsyncMock, return_value=[]), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock, return_value=[]), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             events = await _collect_events(
                 email_draft_stream(
                     recipient_name="Test",
@@ -285,8 +285,8 @@ class TestEmailDraftStreamSearch:
         mock_search = AsyncMock(return_value=[])
         adapter = _mock_adapter(["Draft text."])
 
-        with patch("app.services.email_generator.search_all_collections", mock_search), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", mock_search), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             events = await _collect_events(
                 email_draft_stream(
                     recipient_name="Prof. Chen",
@@ -307,8 +307,8 @@ class TestEmailDraftStreamSearch:
         mock_search = AsyncMock(return_value=[])
         adapter = _mock_adapter(["Draft."])
 
-        with patch("app.services.email_generator.search_all_collections", mock_search), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", mock_search), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             await _collect_events(
                 email_draft_stream(
                     recipient_name="Test",
@@ -327,8 +327,8 @@ class TestEmailDraftStreamSearch:
         mock_search = AsyncMock(return_value=[])
         adapter = _mock_adapter(["Draft."])
 
-        with patch("app.services.email_generator.search_all_collections", mock_search), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", mock_search), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             await _collect_events(
                 email_draft_stream(
                     recipient_name="Test",
@@ -355,8 +355,8 @@ class TestEmailDraftStreamPrompt:
         mock_sources = [_source("Context for the email.")]
         adapter = _mock_adapter(["Draft."])
 
-        with patch("app.services.email_generator.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             await _collect_events(
                 email_draft_stream(
                     recipient_name="Test",
@@ -377,8 +377,8 @@ class TestEmailDraftStreamPrompt:
         mock_sources = [_source("Context.")]
         adapter = _mock_adapter(["Draft."])
 
-        with patch("app.services.email_generator.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             await _collect_events(
                 email_draft_stream(
                     recipient_name="Test",
@@ -397,8 +397,8 @@ class TestEmailDraftStreamPrompt:
         mock_sources = [_source("Context.")]
         adapter = _mock_adapter(["Draft."])
 
-        with patch("app.services.email_generator.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             await _collect_events(
                 email_draft_stream(
                     recipient_name="Test",
@@ -430,8 +430,8 @@ class TestEmailDraftStreamErrors:
 
         adapter.generate_text_stream = MagicMock(side_effect=_failing_stream)
 
-        with patch("app.services.email_generator.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
-             patch("app.services.email_generator.get_llm_adapter", return_value=adapter):
+        with patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock, return_value=mock_sources), \
+             patch("app.services.sse_pipeline.get_llm_adapter", return_value=adapter):
             events = await _collect_events(
                 email_draft_stream(
                     recipient_name="Test",
@@ -448,7 +448,7 @@ class TestEmailDraftStreamErrors:
     async def test_search_error_propagates(self):
         """If search_all_collections raises, it should propagate."""
         with patch(
-            "app.services.email_generator.search_all_collections",
+            "app.services.sse_pipeline.search_all_collections",
             new_callable=AsyncMock,
             side_effect=RuntimeError("ChromaDB down"),
         ):

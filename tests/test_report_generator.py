@@ -211,8 +211,8 @@ class TestReportStreamEvents:
     """Tests for SSE event sequence from report_stream()."""
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_event_sequence(self, mock_search, mock_get_adapter):
         """Events should follow: sources → chunks → done."""
         mock_search.return_value = [_source("context data")]
@@ -228,8 +228,8 @@ class TestReportStreamEvents:
         assert types[-1] == "done"
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_sources_event_contains_data(self, mock_search, mock_get_adapter):
         """Sources event should contain the searched documents."""
         mock_search.return_value = [
@@ -245,8 +245,8 @@ class TestReportStreamEvents:
         assert len(sources_event["sources"]) == 2
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_chunk_content_concatenation(self, mock_search, mock_get_adapter):
         """Chunk events should contain LLM text fragments."""
         mock_search.return_value = []
@@ -260,8 +260,8 @@ class TestReportStreamEvents:
         assert "test report" in full_text
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_empty_sources_still_generates(self, mock_search, mock_get_adapter):
         """Report should still be generated even with no search results."""
         mock_search.return_value = []
@@ -283,8 +283,8 @@ class TestReportStreamSearch:
     """Tests for search behavior in report_stream()."""
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_search_uses_topic(self, mock_search, mock_get_adapter):
         """Search query should be the topic."""
         mock_search.return_value = []
@@ -297,8 +297,8 @@ class TestReportStreamSearch:
         assert args[0][0] == "quantum computing"
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_search_passes_n_results(self, mock_search, mock_get_adapter):
         """n_results should be forwarded to search."""
         mock_search.return_value = []
@@ -310,8 +310,8 @@ class TestReportStreamSearch:
         assert args[0][2] == 15  # n_results is 3rd positional arg
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_search_passes_collections(self, mock_search, mock_get_adapter):
         """Custom collections should be forwarded to search."""
         mock_search.return_value = []
@@ -333,8 +333,8 @@ class TestReportStreamPrompt:
     """Tests for LLM prompt construction in report_stream()."""
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_llm_called_with_temperature(self, mock_search, mock_get_adapter):
         """LLM should be called with temperature=0.3."""
         mock_search.return_value = []
@@ -347,8 +347,8 @@ class TestReportStreamPrompt:
         assert call_kwargs["temperature"] == 0.3
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_llm_called_with_max_tokens(self, mock_search, mock_get_adapter):
         """LLM should be called with max_tokens=4096."""
         mock_search.return_value = []
@@ -369,8 +369,8 @@ class TestReportStreamErrors:
     """Tests for error handling in report_stream()."""
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_llm_error_emits_error_event(self, mock_search, mock_get_adapter):
         """LLM exception should result in an error SSE event."""
         mock_search.return_value = []
@@ -389,8 +389,8 @@ class TestReportStreamErrors:
         assert "LLM service down" in error_events[0]["message"]
 
     @pytest.mark.asyncio
-    @patch("app.services.report_generator.get_llm_adapter")
-    @patch("app.services.report_generator.search_all_collections", new_callable=AsyncMock)
+    @patch("app.services.sse_pipeline.get_llm_adapter")
+    @patch("app.services.sse_pipeline.search_all_collections", new_callable=AsyncMock)
     async def test_error_event_is_last(self, mock_search, mock_get_adapter):
         """After an error event, no done event should follow."""
         mock_search.return_value = []

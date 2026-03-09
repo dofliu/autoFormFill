@@ -3,9 +3,12 @@
 import logging
 from collections.abc import AsyncIterator
 
-from app.llm.factory import get_llm_adapter
 from app.schemas.chat import SourceChunk
-from app.services.chat_service import _sse, search_all_collections
+from app.services.sse_pipeline import (
+    format_context_report,
+    rag_sse_stream,
+    StreamConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,15 +91,7 @@ def build_report_prompt(
     outline = "\n".join(f"- {s}" for s in outline_sections)
 
     # Format context
-    if context_chunks:
-        ctx_parts = []
-        for i, src in enumerate(context_chunks, 1):
-            collection = src.collection
-            title = src.metadata.get("title", "Unknown")
-            ctx_parts.append(f"[Source {i} | {collection} | {title}]\n{src.text}")
-        context = "\n\n".join(ctx_parts)
-    else:
-        context = "(No context documents found — mark all sections as [需補充])"
+    context = format_context_report(context_chunks)
 
     tone = AUDIENCE_TONE.get(target_audience, "formal and scholarly")
 
@@ -130,35 +125,22 @@ async def report_stream(
     - ``{"type": "chunk", "content": "..."}``
     - ``{"type": "done"}`` or ``{"type": "error", "message": "..."}``
     """
-    # 1. Search knowledge base
-    search_query = topic
-    sources = await search_all_collections(search_query, collections, n_results)
 
-    # 2. Emit sources
-    sources_data = [s.model_dump() for s in sources]
-    yield _sse({"type": "sources", "sources": sources_data})
+    def _build(sources: list[SourceChunk]) -> str:
+        return build_report_prompt(
+            topic=topic,
+            report_type=report_type,
+            target_audience=target_audience,
+            sections=sections,
+            language=language,
+            context_chunks=sources,
+        )
 
-    # 3. Build prompt
-    prompt = build_report_prompt(
-        topic=topic,
-        report_type=report_type,
-        target_audience=target_audience,
-        sections=sections,
-        language=language,
-        context_chunks=sources,
-    )
-
-    # 4. Stream LLM response
-    adapter = get_llm_adapter()
-    try:
-        async for chunk in adapter.generate_text_stream(
-            prompt, temperature=0.3, max_tokens=4096
-        ):
-            yield _sse({"type": "chunk", "content": chunk})
-    except Exception as e:
-        logger.error("Report generation LLM streaming failed: %s", e)
-        yield _sse({"type": "error", "message": str(e)})
-        return
-
-    # 5. Done
-    yield _sse({"type": "done"})
+    async for event in rag_sse_stream(
+        search_query=topic,
+        build_prompt=_build,
+        config=StreamConfig(temperature=0.3, max_tokens=4096),
+        collections=collections,
+        n_results=n_results,
+    ):
+        yield event

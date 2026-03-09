@@ -1,6 +1,6 @@
 # SmartFill-Scholar — 任務追蹤
 
-> 最後更新：2026-03-12
+> 最後更新：2026-03-09
 > 使用方式：完成任務後將 `[ ]` 改為 `[x]`，git commit 即可追蹤進度
 
 ---
@@ -144,10 +144,13 @@
 - [x] `frontend/src/App.tsx` 新增 `/report` route + `Sidebar.tsx` 新增導覽入口
 - [x] 新增 `tests/test_report_generator.py`（29 tests — prompt 組合 + SSE 事件 + 搜尋查詢 + 錯誤處理 + schema + DEFAULT_SECTIONS）
 
-### 4.4 Output Adapter 抽象 `P2`
-- [ ] 抽取共同模式為 `app/adapters/base.py` (OutputAdapter ABC)
-- [ ] 重構 form_filler, chat_service, email_generator 為 adapter 實作
-- [ ] 統一 context retrieval 邏輯
+### 4.4 Output Adapter 抽象 `P2` ✅
+- [x] 新增 `app/services/sse_pipeline.py`（共用 SSE 管線：`_sse()` + `search_all_collections()` + context formatters + `StreamConfig` + `rag_sse_stream()`）
+- [x] 重構 `chat_service.py` — 移除重複管線碼，委派給 `rag_sse_stream()`，re-export 向後相容符號
+- [x] 重構 `email_generator.py` — import 來源改為 `sse_pipeline`，使用 `format_context_default()` + `rag_sse_stream()`
+- [x] 重構 `report_generator.py` — import 來源改為 `sse_pipeline`，使用 `format_context_report()` + `rag_sse_stream()`
+- [x] 更新測試 mock 路徑（`test_email_generator.py` + `test_report_generator.py`）
+- [x] 新增 `tests/test_sse_pipeline.py`（24 tests — SSE 格式化 + 多 collection 搜尋 + context formatter + StreamConfig + 完整管線）
 
 ---
 

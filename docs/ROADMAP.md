@@ -1,6 +1,6 @@
 # SmartFill-Scholar — 技術藍圖
 
-> 最後更新：2026-03-12
+> 最後更新：2026-03-09
 
 ## 總覽
 
@@ -9,7 +9,7 @@ Phase 1  ✅  後端 MVP          — FastAPI + SQLite + ChromaDB + Gemini
 Phase 2  ✅  前端 MVP          — React 19 + TypeScript + Tailwind CSS
 Phase 2.5 ✅ 收尾補強          — 持久化 Job Store、PDF 填寫、測試補齊
 Phase 3  🔧  知識引擎基礎       — 資料夾監控✅ 增量索引✅ 索引API+UI✅ 多格式✅、Entity 泛化
-Phase 4  🔧  多輸出適配器       — Chat 問答✅、郵件草稿✅、報告生成✅、Adapter 抽象
+Phase 4  ✅  多輸出適配器       — Chat 問答✅、郵件草稿✅、報告生成✅、Adapter 抽象✅
 Phase 5  ⬜  智能化            — 知識圖譜、合規檢查、版本追蹤
 Phase 6  ⬜  協作與部署         — 多使用者、權限、Docker、CI/CD
 ```
@@ -237,20 +237,24 @@ UserProfile                     Entity
 └── tests/test_report_generator.py     # 29 tests
 ```
 
-### 4.4 Output Adapter 抽象層
+### 4.4 Output Adapter 抽象層 ✅
 
-到 Phase 4 結束時，應該浮現一個共同模式：
+**設計決策**：函式組合 > 類別繼承。三個串流服務各 ~50 行完全相同的 boilerplate，真正不同的只有搜尋查詢構建、prompt 模板、LLM 參數。用 ABC 會過度設計，選擇共用 `rag_sse_stream()` + `build_prompt` callback。
 
-```python
-# app/adapters/base.py
-class OutputAdapter(ABC):
-    async def generate(self, query: str, context: list[str], template: str | None) -> str:
-        ...
+**實作**：
+```
+app/services/sse_pipeline.py    ← 共用 SSE 管線（~170 行）
+  - _sse()                     — SSE 事件格式化
+  - search_all_collections()   — 多 collection 並行搜尋
+  - format_context_default()   — Chat/Email 格式
+  - format_context_report()    — Report 格式
+  - StreamConfig               — LLM 參數 dataclass
+  - rag_sse_stream()           — 共用 search→sources→prompt→stream→done 管線
 
-# app/adapters/form_adapter.py — 表單填寫
-# app/adapters/chat_adapter.py — 問答
-# app/adapters/email_adapter.py — 郵件
-# app/adapters/report_adapter.py — 報告
+chat_service.py                ← 簡化（161→92 行），re-export 向後相容
+email_generator.py             ← 簡化（125→103 行）
+report_generator.py            ← 簡化（165→147 行）
+tests/test_sse_pipeline.py     ← 24 tests
 ```
 
 ---
@@ -369,7 +373,7 @@ services:
 
 2026 Q2
   ⬜ Phase 3.5: Entity 泛化 (1-2 週)
-  ⬜ Phase 4.4: Output Adapter 抽象 (1-2 週)
+  ✅ Phase 4.4: Output Adapter 抽象（函式組合 + sse_pipeline 共用管線）
   ⬜ Phase 2.5.4: 錯誤處理強化 (1 週)
 
 2026 Q3

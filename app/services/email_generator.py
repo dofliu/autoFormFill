@@ -3,15 +3,17 @@ Email Draft Generator — RAG-powered email drafting with streaming.
 
 Orchestrates: multi-collection search → prompt building → LLM streaming.
 Yields SSE-formatted events for the router to wrap in StreamingResponse.
-
-Reuses ``search_all_collections`` and ``_sse`` from the chat service.
 """
+
 import logging
 from collections.abc import AsyncIterator
 
-from app.llm.factory import get_llm_adapter
 from app.schemas.chat import SourceChunk
-from app.services.chat_service import _sse, search_all_collections
+from app.services.sse_pipeline import (
+    format_context_default,
+    rag_sse_stream,
+    StreamConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,19 +50,7 @@ def build_email_prompt(
     context_chunks: list[SourceChunk],
 ) -> str:
     """Build the complete prompt for email draft generation."""
-    # Format retrieved context
-    context_parts: list[str] = []
-    for i, chunk in enumerate(context_chunks, 1):
-        meta_str = ", ".join(
-            f"{k}: {v}" for k, v in chunk.metadata.items() if v
-        )
-        header = f"[Source {i}] ({chunk.collection}"
-        if meta_str:
-            header += f", {meta_str}"
-        header += ")"
-        context_parts.append(f"{header}\n{chunk.text}")
-
-    context = "\n---\n".join(context_parts) if context_parts else "(No relevant documents found)"
+    context = format_context_default(context_chunks)
 
     system = EMAIL_SYSTEM_PROMPT.format(
         tone=tone,
@@ -90,35 +80,23 @@ async def email_draft_stream(
 
     Yields SSE-formatted strings (``data: {json}\\n\\n``).
     """
-    # 1. Search knowledge base for relevant context
     search_query = f"{recipient_name} {purpose}"
-    sources = await search_all_collections(search_query, collections, n_results)
 
-    # 2. Emit sources event
-    sources_data = [s.model_dump() for s in sources]
-    yield _sse({"type": "sources", "sources": sources_data})
+    def _build(sources: list[SourceChunk]) -> str:
+        return build_email_prompt(
+            recipient_name=recipient_name,
+            recipient_email=recipient_email,
+            subject_hint=subject_hint,
+            purpose=purpose,
+            tone=tone,
+            context_chunks=sources,
+        )
 
-    # 3. Build prompt
-    prompt = build_email_prompt(
-        recipient_name=recipient_name,
-        recipient_email=recipient_email,
-        subject_hint=subject_hint,
-        purpose=purpose,
-        tone=tone,
-        context_chunks=sources,
-    )
-
-    # 4. Stream LLM response
-    adapter = get_llm_adapter()
-    try:
-        async for chunk in adapter.generate_text_stream(
-            prompt, temperature=0.4, max_tokens=2048
-        ):
-            yield _sse({"type": "chunk", "content": chunk})
-    except Exception as e:
-        logger.error(f"Email draft LLM streaming failed: {e}")
-        yield _sse({"type": "error", "message": str(e)})
-        return
-
-    # 5. Done signal
-    yield _sse({"type": "done"})
+    async for event in rag_sse_stream(
+        search_query=search_query,
+        build_prompt=_build,
+        config=StreamConfig(temperature=0.4, max_tokens=2048),
+        collections=collections,
+        n_results=n_results,
+    ):
+        yield event

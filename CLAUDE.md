@@ -73,11 +73,12 @@ npm run dev
 | `app/services/indexing_service.py` | 索引引擎（extract→chunk→embed→store + 增量邏輯） |
 | `app/services/file_watcher.py` | watchdog 目錄監控 + debounce + async queue |
 | `app/routers/indexing.py` | 索引管理 API（status / rescan / files） |
-| `app/services/chat_service.py` | Chat 編排器（多 collection 搜尋 + prompt + SSE 串流） |
+| `app/services/sse_pipeline.py` | 共用 SSE 管線（search + context format + StreamConfig + rag_sse_stream） |
+| `app/services/chat_service.py` | Chat 編排器（prompt + 委派 sse_pipeline） |
 | `app/routers/chat.py` | Chat SSE streaming endpoint |
-| `app/services/email_generator.py` | Email 草稿編排器（重用 chat_service 搜尋 + SSE） |
+| `app/services/email_generator.py` | Email 草稿編排器（prompt + 委派 sse_pipeline） |
 | `app/routers/email.py` | Email SSE streaming endpoint |
-| `app/services/report_generator.py` | 報告生成編排器（結構化大綱 + 多報告類型 + SSE 串流） |
+| `app/services/report_generator.py` | 報告生成編排器（結構化大綱 + 委派 sse_pipeline） |
 | `app/routers/report.py` | Report SSE streaming endpoint |
 | `frontend/src/api/client.ts` | HTTP 客戶端封裝 |
 | `frontend/src/api/chat.ts` | Chat SSE stream reader（async generator） |
@@ -132,7 +133,7 @@ POST   /api/v1/report/generate                   報告生成（SSE streaming）
 ## 測試
 
 ```bash
-# 後端測試（201 tests）
+# 後端測試（225 tests）
 python -m pytest tests/ -v
 
 # 前端型別檢查
@@ -156,6 +157,7 @@ cd frontend && npm run build
 | `tests/test_email_generator.py` | 25 | Email prompt 組合 + SSE 事件 + 搜尋查詢 + 錯誤處理 + schema |
 | `tests/test_multi_format.py` | 29 | PPTX/XLSX 解析 + 檔案偵測 + dispatcher + config 驗證 |
 | `tests/test_report_generator.py` | 29 | Report prompt 組合 + SSE 事件 + 搜尋查詢 + 錯誤處理 + schema + DEFAULT_SECTIONS |
+| `tests/test_sse_pipeline.py` | 24 | SSE 格式化 + 多 collection 搜尋 + context formatter + StreamConfig + RAG 管線 |
 
 ## 環境變數
 
@@ -189,7 +191,7 @@ cd frontend && npm run build
 | Phase 2 | ✅ 完成 | 前端 MVP（React 19 + TypeScript + Tailwind CSS） |
 | Phase 2.5 | ✅ 完成 | 收尾：~~持久化 Job Store~~✅、~~PDF 填寫~~✅、~~測試補齊~~✅ |
 | Phase 3 | 🔧 進行中 | 知識引擎基礎：~~資料夾監控~~✅ ~~增量索引~~✅ ~~索引 API+UI~~✅ ~~多格式~~✅、Entity 泛化 |
-| Phase 4 | 🔧 進行中 | 多輸出適配器：~~Chat 問答~~✅、~~郵件草稿~~✅、~~報告生成~~✅、Adapter 抽象 |
+| Phase 4 | ✅ 完成 | 多輸出適配器：~~Chat 問答~~✅、~~郵件草稿~~✅、~~報告生成~~✅、~~Adapter 抽象~~✅ |
 | Phase 5 | ⬜ 規劃 | 智能化：知識圖譜、合規檢查、版本追蹤 |
 | Phase 6 | ⬜ 規劃 | 協作與部署：多使用者、權限、Docker |
 
@@ -205,7 +207,7 @@ cd frontend && npm run build
 8. ~~**Phase 4.2** — 郵件草稿生成~~ ✅ 已完成
 9. ~~**Phase 3.4** — 多格式支援（.pptx + .xlsx）~~ ✅ 已完成
 10. ~~**Phase 4.3** — 報告生成~~ ✅ 已完成
-11. **Phase 4.4** — Output Adapter 抽象
+11. ~~**Phase 4.4** — Output Adapter 抽象~~ ✅ 已完成
 
 ### 架構演進方向
 
