@@ -1,0 +1,16 @@
+fastapi>=0.115.0
+uvicorn>=0.27.0
+sqlalchemy>=2.0.25
+aiosqlite>=0.20.0
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+python-dotenv>=1.0.1
+chromadb>=0.5.0
+google-genai>=1.10.0
+python-docx>=1.1.0
+docxtpl>=0.18.0
+PyMuPDF>=1.25.0
+pdfplumber>=0.11.0
+aiofiles>=24.1.0
+python-multipart>=0.0.6
+httpx>=0.28.0
