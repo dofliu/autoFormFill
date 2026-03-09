@@ -4,7 +4,9 @@
 
 ## 專案概述
 
-SmartFill-Scholar 是一套智能學術表單自動填寫系統，透過混合檢索（SQL + RAG）與 LLM 生成來自動填寫學術申請表單。
+SmartFill-Scholar 的定位是 **Personal Knowledge API** —— 將個人或組織的散落資料統一為可程式化查詢的知識層。表單自動填寫是第一個應用，底層的 SQL + Vector + LLM Router 架構可延伸到問答、郵件草稿、報告生成等多種場景。
+
+> 詳細願景見 `docs/VISION.md`，技術藍圖見 `docs/ROADMAP.md`，任務追蹤見 `docs/TODO.md`
 
 ## 啟動方式
 
@@ -126,3 +128,52 @@ cd frontend && npm run build
 | `CHROMA_PERSIST_DIR` | `./data/chroma` | ChromaDB 持久化路徑 |
 | `UPLOAD_DIR` | `./data/uploads` | 上傳暫存目錄 |
 | `OUTPUT_DIR` | `./data/outputs` | 填寫結果輸出目錄 |
+
+---
+
+## 專案進度與規劃
+
+### 目前狀態
+
+| Phase | 狀態 | 說明 |
+|-------|------|------|
+| Phase 1 | ✅ 完成 | 後端 MVP（FastAPI + SQLite + ChromaDB + Gemini） |
+| Phase 2 | ✅ 完成 | 前端 MVP（React 19 + TypeScript + Tailwind CSS） |
+| Phase 2.5 | ⬜ 待做 | 收尾：持久化 Job Store、PDF 填寫、測試補齊 |
+| Phase 3 | ⬜ 待做 | 知識引擎基礎：資料夾監控、增量索引、Entity 泛化 |
+| Phase 4 | ⬜ 規劃 | 多輸出適配器：Chat 問答、郵件草稿、報告生成 |
+| Phase 5 | ⬜ 規劃 | 智能化：知識圖譜、合規檢查、版本追蹤 |
+| Phase 6 | ⬜ 規劃 | 協作與部署：多使用者、權限、Docker |
+
+### 下一步優先級
+
+1. **Phase 2.5.1** — Job Store 持久化（in-memory → SQLite）
+2. **Phase 3.1** — 資料夾監控（watchdog + 自動索引）
+3. **Phase 3.2** — 增量索引（hash 比對 + 差異更新）
+4. **Phase 4.1** — Chat 問答（StreamingResponse + SSE）
+
+### 架構演進方向
+
+```
+Layer 3 應用層: 表單填寫 | Chat 問答 | 郵件草稿 | 報告生成 | ...
+Layer 2 路由層: Intent Router (SQL_DB / VECTOR_DB / SKIP)
+Layer 1 資料層: SQLite (結構化) + ChromaDB (向量) + File Watcher (自動索引)
+```
+
+每個新「應用」= 一組新的 service + router + 前端頁面，不需改動底層引擎。
+
+### 規劃文件索引
+
+| 文件 | 內容 | 何時讀 |
+|------|------|--------|
+| `docs/VISION.md` | 核心願景、定位、架構哲學、應用場景 | 理解「為什麼」 |
+| `docs/ROADMAP.md` | 分階段技術藍圖、每階段詳細設計 | 理解「怎麼做」 |
+| `docs/TODO.md` | 可追蹤的 checkbox 任務清單 | 理解「做什麼」 |
+| `CLAUDE.md` (本文) | 開發慣例、架構約定、常見陷阱 | 每次開始前必讀 |
+
+### 新 session 快速上手
+
+1. 讀本文件 (`CLAUDE.md`) 了解架構約定
+2. 讀 `docs/TODO.md` 找到下一個待辦任務
+3. 如需理解設計背景，讀 `docs/VISION.md` 和 `docs/ROADMAP.md`
+4. 開始開發前確認後端/前端能正常啟動（見上方「啟動方式」）
