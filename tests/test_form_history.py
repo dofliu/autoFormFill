@@ -10,8 +10,8 @@ class TestJobStoreHistory:
     
     def setup_method(self):
         self.store = JobStore()
-        # Clear any existing jobs
-        self.store._jobs.clear()
+        # Clear any existing jobs in memory store
+        self.store._memory_store.clear()
     
     def test_get_jobs_by_user_empty(self):
         """Test getting jobs for a user with no jobs"""

@@ -132,7 +132,7 @@ class TestFormFillerIntegration:
         }
         
         # Add job to store
-        job_store._jobs[job_id] = job_data
+        job_store._memory_store[job_id] = job_data
         
         # Mock dependencies
         mock_db = AsyncMock()
@@ -168,8 +168,8 @@ class TestFormFillerIntegration:
                 assert call_kwargs["user_id"] == 1
         finally:
             # Clean up
-            if job_id in job_store._jobs:
-                del job_store._jobs[job_id]
+            if job_id in job_store._memory_store:
+                del job_store._memory_store[job_id]
             # Clean up temp file
             temp_path = os.path.join("data/uploads", temp_template)
             if os.path.exists(temp_path):
