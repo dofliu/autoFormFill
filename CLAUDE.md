@@ -197,17 +197,19 @@ cd frontend && npm run build
 
 ### 下一步優先級
 
-1. ~~**Phase 2.5.1** — Job Store 持久化~~ ✅ 已完成
-2. ~~**Phase 3.1** — 資料夾監控（watchdog + 自動索引）~~ ✅ 已完成
-3. ~~**Phase 3.2** — 增量索引（hash 比對 + 差異更新）~~ ✅ 已完成
-4. ~~**Phase 3.3** — 索引管理 API + UI~~ ✅ 已完成
-5. ~~**Phase 2.5.2** — PDF 表單填寫（`fill_pdf()` 方法）~~ ✅ 已完成
-6. ~~**Phase 4.1** — Chat 問答（StreamingResponse + SSE）~~ ✅ 已完成
-7. ~~**Phase 2.5.3** — 測試補齊（form_parser + intent_router + rag_pipeline）~~ ✅ 已完成
-8. ~~**Phase 4.2** — 郵件草稿生成~~ ✅ 已完成
-9. ~~**Phase 3.4** — 多格式支援（.pptx + .xlsx）~~ ✅ 已完成
-10. ~~**Phase 4.3** — 報告生成~~ ✅ 已完成
-11. ~~**Phase 4.4** — Output Adapter 抽象~~ ✅ 已完成
+> 以下為尚未完成的任務，依建議優先順序排列。
+> 已完成項目（Phase 1-4）詳見 `docs/TODO.md`。
+
+1. **Phase 3.5** — Entity 泛化（設計 Entity + EntityAttribute schema，評估泛化 UserProfile）
+2. **Phase 2.5.4** — 錯誤處理強化（LLM retry、前端 Error Boundary、統一 error response）
+3. **Phase 5.1** — 知識圖譜（Entity Relations + Graph 視覺化）
+4. **Phase 5.2** — 合規檢查（Rule Engine + 欄位驗證）
+5. **Phase 5.3** — 版本追蹤（Document versioning + Diff）
+6. **Phase 5.4** — 智能提醒（截止日偵測 + 通知）
+7. **Phase 6.1** — 認證與權限（JWT + RBAC）
+8. **Phase 6.2** — 多使用者隔離
+9. **Phase 6.3** — Docker 部署
+10. **Phase 6.4** — CI/CD
 
 ### 架構演進方向
 
