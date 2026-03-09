@@ -6,8 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.models import UserProfile, EducationExperience  # noqa: F401 — register ORM models
-from app.routers import documents, education_experience, forms, user_profiles
+from app.models import UserProfile, EducationExperience, FormJob, FileIndex  # noqa: F401 — register ORM models
+from app.routers import chat, documents, education_experience, email, forms, indexing, report, user_profiles
+from app.services.file_watcher import file_watcher
 from app.vector_store import init_vector_store
 
 
@@ -18,7 +19,14 @@ async def lifespan(app: FastAPI):
         os.makedirs(dir_path, exist_ok=True)
     await init_db()
     init_vector_store()
+
+    # Start file watcher for auto-indexing (Phase 3)
+    await file_watcher.start()
+
     yield
+
+    # Shutdown: stop file watcher
+    await file_watcher.stop()
 
 
 app = FastAPI(
@@ -46,6 +54,10 @@ app.include_router(user_profiles.router)
 app.include_router(education_experience.router)
 app.include_router(documents.router)
 app.include_router(forms.router)
+app.include_router(indexing.router)
+app.include_router(chat.router)
+app.include_router(email.router)
+app.include_router(report.router)
 
 
 @app.get("/health")

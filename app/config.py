@@ -14,5 +14,30 @@ class Settings(BaseSettings):
     output_dir: str = "./data/outputs"
     jobs_dir: str = "./data/jobs"
 
+    # Phase 3: File watcher & auto-indexing
+    watch_dirs: str = ""  # Comma-separated paths to monitor, e.g. "~/Documents/papers,~/Research"
+    watch_interval: int = 5  # Seconds between filesystem polls (fallback if OS events unavailable)
+    auto_index_collection: str = "auto_indexed"  # ChromaDB collection for auto-indexed files
+    supported_extensions: str = ".docx,.pdf,.txt,.md,.pptx,.xlsx"  # File extensions to index
+
+    # Phase 4: Chat
+    chat_context_rounds: int = 5  # Number of conversation rounds to keep as LLM context
+
+    def get_watch_dirs(self) -> list[str]:
+        """Parse WATCH_DIRS into a list of resolved absolute paths."""
+        if not self.watch_dirs.strip():
+            return []
+        import os
+        dirs = []
+        for d in self.watch_dirs.split(","):
+            d = d.strip()
+            if d:
+                dirs.append(os.path.abspath(os.path.expanduser(d)))
+        return dirs
+
+    def get_supported_extensions(self) -> set[str]:
+        """Parse SUPPORTED_EXTENSIONS into a set."""
+        return {ext.strip().lower() for ext in self.supported_extensions.split(",") if ext.strip()}
+
 
 settings = Settings()

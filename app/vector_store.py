@@ -4,7 +4,7 @@ from app.config import settings
 
 _chroma_client: chromadb.ClientAPI | None = None
 
-COLLECTIONS = ["academic_papers", "research_projects"]
+COLLECTIONS = ["academic_papers", "research_projects", "auto_indexed"]
 
 
 def get_chroma_client() -> chromadb.ClientAPI:

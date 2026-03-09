@@ -1,15 +1,15 @@
 # SmartFill-Scholar — 技術藍圖
 
-> 最後更新：2026-03-09
+> 最後更新：2026-03-12
 
 ## 總覽
 
 ```
 Phase 1  ✅  後端 MVP          — FastAPI + SQLite + ChromaDB + Gemini
 Phase 2  ✅  前端 MVP          — React 19 + TypeScript + Tailwind CSS
-Phase 2.5 ⬜ 收尾補強          — 已知問題修補、測試補齊
-Phase 3  ⬜  知識引擎基礎       — 自動索引、增量更新、Entity 泛化
-Phase 4  ⬜  多輸出適配器       — Chat 問答、郵件草稿、報告生成
+Phase 2.5 ✅ 收尾補強          — 持久化 Job Store、PDF 填寫、測試補齊
+Phase 3  🔧  知識引擎基礎       — 資料夾監控✅ 增量索引✅ 索引API+UI✅ 多格式✅、Entity 泛化
+Phase 4  🔧  多輸出適配器       — Chat 問答✅、郵件草稿✅、報告生成✅、Adapter 抽象
 Phase 5  ⬜  智能化            — 知識圖譜、合規檢查、版本追蹤
 Phase 6  ⬜  協作與部署         — 多使用者、權限、Docker、CI/CD
 ```
@@ -141,9 +141,9 @@ id | file_path | file_hash | status      | chunks_count | last_indexed_at
 |------|---------|--------|
 | `.docx` | python-docx（已有） | ✅ |
 | `.pdf` | pdfplumber + PyMuPDF（已有） | ✅ |
-| `.txt` / `.md` | 直接讀取 | P0 |
-| `.pptx` | python-pptx slide text | P1 |
-| `.xlsx` | openpyxl cell values | P1 |
+| `.txt` / `.md` | 直接讀取 | ✅ |
+| `.pptx` | python-pptx slide text（文字框+表格+多slide） | ✅ |
+| `.xlsx` | openpyxl cell values（多工作表+混合型別） | ✅ |
 | `.html` | BeautifulSoup text extraction | P2 |
 
 ```
@@ -214,15 +214,27 @@ UserProfile                     Entity
 └── frontend/src/pages/EmailDraftPage.tsx
 ```
 
-### 4.3 結構化報告生成
+### 4.3 結構化報告生成 ✅
 
-**架構**：給定報告大綱（或使用預設模板），逐段從知識庫填充內容。
+**架構**：給定報告主題 + 類型 + 目標讀者，從知識庫檢索相關 context，生成結構化研究報告（SSE 串流）。
+
+**報告類型**：摘要型（summary）/ 詳細型（detailed）/ 主管摘要型（executive），各有預設章節大綱。
+
+**技術重點**：
+- temperature=0.3、max_tokens=4096（比 email 更長更嚴謹）
+- 3 種目標讀者語調（academic / business / general）
+- 自訂章節大綱覆蓋預設值
+- 前端支援 .md 和 .txt 下載
 
 ```
 新增檔案：
-├── app/services/report_generator.py  # section-by-section generation
-├── app/routers/reports.py            # POST /api/v1/reports/generate
-└── frontend/src/pages/ReportPage.tsx
+├── app/schemas/report.py              # ReportRequest Pydantic model
+├── app/services/report_generator.py   # RAG → structured prompt → SSE streaming
+├── app/routers/report.py              # POST /api/v1/report/generate
+├── frontend/src/types/report.ts       # TypeScript types
+├── frontend/src/api/report.ts         # SSE async generator
+├── frontend/src/pages/ReportPage.tsx   # 分割視圖 UI（表單 + Markdown 預覽）
+└── tests/test_report_generator.py     # 29 tests
 ```
 
 ### 4.4 Output Adapter 抽象層
@@ -349,14 +361,18 @@ services:
 2026 Q1 (已完成)
   ✅ Phase 1: Backend MVP
   ✅ Phase 2: Frontend MVP
+  ✅ Phase 2.5: 收尾補強（Job Store + PDF 填寫 + 測試補齊）
+  ✅ Phase 3.1-3.4: 知識引擎（監控 + 增量索引 + API/UI + 多格式）
+  ✅ Phase 4.1: Chat 問答（SSE streaming）
+  ✅ Phase 4.2: 郵件草稿生成
+  ✅ Phase 4.3: 報告生成（結構化大綱 + 3 種報告類型 + SSE 串流）
 
 2026 Q2
-  ⬜ Phase 2.5: 收尾補強 (1-2 週)
-  ⬜ Phase 3: 知識引擎基礎 (2-3 週)
-  ⬜ Phase 4.1: Chat 問答 (1 週)
+  ⬜ Phase 3.5: Entity 泛化 (1-2 週)
+  ⬜ Phase 4.4: Output Adapter 抽象 (1-2 週)
+  ⬜ Phase 2.5.4: 錯誤處理強化 (1 週)
 
 2026 Q3
-  ⬜ Phase 4.2-4.4: 郵件 + 報告 + Adapter 抽象 (2-3 週)
   ⬜ Phase 5.1-5.2: 知識圖譜 + 合規檢查 (3-4 週)
 
 2026 Q4

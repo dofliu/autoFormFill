@@ -127,11 +127,12 @@ autoFill/
 │   ├── config.py                    # pydantic-settings 設定
 │   ├── database.py                  # 非同步 SQLAlchemy 引擎
 │   ├── vector_store.py              # ChromaDB 客戶端
-│   ├── job_store.py                 # 表單填寫任務暫存（in-memory）
+│   ├── job_store.py                 # 表單填寫任務持久化（DB-backed + in-memory fallback）
 │   │
 │   ├── models/                      # ORM 模型
 │   │   ├── user_profile.py
-│   │   └── education_experience.py
+│   │   ├── education_experience.py
+│   │   └── form_job.py              # FormJob ORM（表單填寫任務記錄）
 │   │
 │   ├── schemas/                     # Pydantic 請求/回應模型
 │   │   ├── user_profile.py
@@ -153,7 +154,8 @@ autoFill/
 │   │   ├── intent_router.py         # LLM 欄位分類
 │   │   ├── rag_pipeline.py          # 檢索 + 生成 + 幻覺防護
 │   │   ├── form_filler.py           # 完整填寫流程編排
-│   │   └── document_generator.py    # docx 模板渲染
+│   │   ├── document_generator.py    # docx 模板渲染
+│   │   └── job_service.py           # FormJob async CRUD
 │   │
 │   ├── llm/                         # LLM 適配器
 │   │   ├── base.py                  # 抽象基底類別
@@ -309,7 +311,7 @@ npx tsc --noEmit                               # 僅型別檢查
 - **ChromaDB sync → async**：ChromaDB 為同步 API，所有呼叫透過 `asyncio.to_thread()` 包裝，避免阻塞 FastAPI 事件迴圈
 - **LLM Adapter Pattern**：抽象基底類別 + 工廠模式，可透過 `.env` 的 `LLM_PROVIDER` 切換不同 LLM 供應商
 - **`[需人工補充]`**：資料不足時的預設填充標記，前端以紅色標示提醒使用者
-- **Job Store**：表單填寫結果以 in-memory 方式暫存，支援預覽、編輯、重新提交流程
+- **Job Store**：表單填寫結果持久化至 SQLite（`FormJob` ORM），支援重啟後保留歷史紀錄，無 db session 時自動 fallback 為 in-memory
 - **docxtpl**：處理 Word 模板中變數可能被拆分到多個 XML run 的問題，比純 regex 替換更可靠
 
 ## 授權

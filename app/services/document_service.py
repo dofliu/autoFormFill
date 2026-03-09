@@ -2,8 +2,10 @@ import asyncio
 import uuid
 
 import fitz  # PyMuPDF
+import openpyxl
 import pdfplumber
 from docx import Document as DocxDocument
+from pptx import Presentation
 
 from app.llm.factory import get_llm_adapter
 from app.schemas.document import DocumentMetadataInput, DocumentUploadResponse
@@ -42,12 +44,80 @@ def extract_text_from_pdf(file_path: str) -> str:
     return "\n".join(texts)
 
 
+def extract_text_from_plaintext(file_path: str) -> str:
+    """Read plain text files (.txt, .md) with encoding detection."""
+    for encoding in ["utf-8", "utf-8-sig", "cp950", "big5", "latin-1"]:
+        try:
+            with open(file_path, "r", encoding=encoding) as f:
+                return f.read()
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    # Last resort: read as bytes and decode with replacement
+    with open(file_path, "rb") as f:
+        return f.read().decode("utf-8", errors="replace")
+
+
+def extract_text_from_pptx(file_path: str) -> str:
+    """Extract text from a PowerPoint (.pptx) file.
+
+    Reads text from all shapes (text boxes, titles, tables, grouped shapes)
+    across every slide, preserving slide order.
+    """
+    prs = Presentation(file_path)
+    texts: list[str] = []
+    for slide_idx, slide in enumerate(prs.slides, 1):
+        slide_texts: list[str] = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for paragraph in shape.text_frame.paragraphs:
+                    text = paragraph.text.strip()
+                    if text:
+                        slide_texts.append(text)
+            if shape.has_table:
+                for row in shape.table.rows:
+                    for cell in row.cells:
+                        text = cell.text.strip()
+                        if text:
+                            slide_texts.append(text)
+        if slide_texts:
+            texts.append(f"[Slide {slide_idx}]\n" + "\n".join(slide_texts))
+    return "\n\n".join(texts)
+
+
+def extract_text_from_xlsx(file_path: str) -> str:
+    """Extract text from an Excel (.xlsx) file.
+
+    Reads cell values from all worksheets. Each sheet is prefixed with its name.
+    Empty rows are skipped; cells are tab-separated.
+    """
+    wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+    texts: list[str] = []
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        sheet_lines: list[str] = []
+        for row in ws.iter_rows(values_only=True):
+            # Filter out completely empty rows
+            cell_values = [str(c) if c is not None else "" for c in row]
+            if any(v.strip() for v in cell_values):
+                sheet_lines.append("\t".join(cell_values))
+        if sheet_lines:
+            texts.append(f"[Sheet: {sheet_name}]\n" + "\n".join(sheet_lines))
+    wb.close()
+    return "\n\n".join(texts)
+
+
 def extract_text(file_path: str, file_type: str) -> str:
     """Extract text based on file type."""
     if file_type == "docx":
         return extract_text_from_docx(file_path)
     elif file_type == "pdf":
         return extract_text_from_pdf(file_path)
+    elif file_type in ("txt", "md"):
+        return extract_text_from_plaintext(file_path)
+    elif file_type == "pptx":
+        return extract_text_from_pptx(file_path)
+    elif file_type == "xlsx":
+        return extract_text_from_xlsx(file_path)
     else:
         raise ValueError(f"Unsupported file type: {file_type}")
 

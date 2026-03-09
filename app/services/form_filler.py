@@ -97,7 +97,7 @@ async def fill_form(
     fields_filled = sum(1 for r in results if r.source != "skip")
     fields_skipped = sum(1 for r in results if r.source == "skip")
 
-    # Create job record
+    # Create job record (persisted to database)
     job_data = {
         "filename": original_filename,
         "template_filename": os.path.basename(file_path),
@@ -105,10 +105,10 @@ async def fill_form(
         "fields": [r.dict() for r in results],
         "fill_data": fill_data,
         "output_path": output_path,
-        "field_overrides": field_overrides or {}
+        "field_overrides": field_overrides or {},
     }
-    
-    job_id = job_store.create_job(job_data)
+
+    job_id = await job_store.create_job(job_data, db)
 
     return FormFillResponse(
         job_id=job_id,
@@ -138,7 +138,7 @@ async def submit_form_with_overrides(
     db: AsyncSession,
 ) -> FormFillResponse:
     """Regenerate form with new field overrides."""
-    job = job_store.get_job(job_id)
+    job = await job_store.get_job(job_id, db)
     if not job:
         raise ValueError(f"Job {job_id} not found")
     

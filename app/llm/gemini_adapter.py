@@ -1,4 +1,5 @@
 import json
+from collections.abc import AsyncIterator
 
 from google import genai
 from google.genai import types
@@ -23,6 +24,21 @@ class GeminiAdapter(LLMAdapter):
             ),
         )
         return response.text
+
+    async def generate_text_stream(
+        self, prompt: str, **kwargs
+    ) -> AsyncIterator[str]:
+        """Stream text response from Gemini, yielding chunks as they arrive."""
+        async for chunk in await self.client.aio.models.generate_content_stream(
+            model=self.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=kwargs.get("temperature", 0.3),
+                max_output_tokens=kwargs.get("max_tokens", 2048),
+            ),
+        ):
+            if chunk.text:
+                yield chunk.text
 
     async def generate_json(
         self, prompt: str, schema: dict | None = None

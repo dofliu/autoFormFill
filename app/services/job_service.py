@@ -1,3 +1,7 @@
+"""
+Async CRUD operations for FormJob model.
+Database-backed persistence for form fill jobs.
+"""
 import json
 import uuid
 from datetime import datetime
@@ -11,16 +15,18 @@ from app.models.form_job import FormJob
 
 async def create_job(db: AsyncSession, job_data: dict) -> str:
     """Create a new form job in the database."""
-    job_id = str(uuid.uuid4())
+    job_id = job_data.get("job_id") or str(uuid.uuid4())
     job = FormJob(
         job_id=job_id,
         user_id=job_data["user_id"],
-        filename=job_data["filename"],
-        template_filename=job_data["template_filename"],
+        filename=job_data.get("filename", ""),
+        template_filename=job_data.get("template_filename", ""),
         output_path=job_data.get("output_path", ""),
         fields_json=json.dumps(job_data.get("fields", []), ensure_ascii=False),
         fill_data_json=json.dumps(job_data.get("fill_data", {}), ensure_ascii=False),
-        field_overrides_json=json.dumps(job_data.get("field_overrides", {}), ensure_ascii=False),
+        field_overrides_json=json.dumps(
+            job_data.get("field_overrides", {}), ensure_ascii=False
+        ),
         created_at=datetime.now(),
     )
     db.add(job)
@@ -37,16 +43,31 @@ async def get_job(db: AsyncSession, job_id: str) -> Optional[dict]:
 
 
 async def update_job(db: AsyncSession, job_id: str, updates: dict) -> bool:
-    """Update a job with new data."""
+    """Update a job with new data.
+
+    Handles mapping of dict keys to JSON column names:
+      - "fields" → "fields_json"
+      - "fill_data" → "fill_data_json"
+      - "field_overrides" → "field_overrides_json"
+    """
     result = await db.execute(select(FormJob).where(FormJob.job_id == job_id))
     job = result.scalar_one_or_none()
     if not job:
         return False
-    
+
+    # Map logical field names to JSON column names
+    json_field_map = {
+        "fields": "fields_json",
+        "fill_data": "fill_data_json",
+        "field_overrides": "field_overrides_json",
+    }
+
     for key, value in updates.items():
-        if hasattr(job, key):
+        if key in json_field_map:
+            setattr(job, json_field_map[key], json.dumps(value, ensure_ascii=False))
+        elif hasattr(job, key):
             setattr(job, key, value)
-    
+
     await db.commit()
     return True
 

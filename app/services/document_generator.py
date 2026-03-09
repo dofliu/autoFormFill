@@ -1,10 +1,14 @@
+import logging
 import os
 import re
 import uuid
 
+import fitz  # PyMuPDF
 from docxtpl import DocxTemplate
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def fill_docx_template(template_path: str, context: dict) -> str:
@@ -70,6 +74,50 @@ def _replace_in_paragraph(para, fill_data: dict, pattern: re.Pattern) -> None:
             run.text = ""
 
 
+def fill_pdf(template_path: str, fill_data: dict) -> str:
+    """Fill a PDF form by writing values into AcroForm widgets.
+
+    Uses PyMuPDF to iterate over interactive form widgets and set their
+    values from ``fill_data``.  The mapping key is the widget's
+    ``field_name`` attribute — the same identifier returned by
+    ``form_parser.parse_pdf()``.
+
+    Returns the output file path.
+    """
+    output_name = f"filled_{uuid.uuid4().hex[:8]}.pdf"
+    output_path = os.path.join(settings.output_dir, output_name)
+
+    doc = fitz.open(template_path)
+    filled_count = 0
+
+    for page in doc:
+        for widget in page.widgets():
+            field_name = widget.field_name
+            if not field_name or field_name not in fill_data:
+                continue
+
+            value = fill_data[field_name]
+            if not value:
+                continue
+
+            try:
+                widget.field_value = str(value)
+                widget.update()
+                filled_count += 1
+            except Exception as e:
+                logger.warning(
+                    f"Failed to fill PDF widget '{field_name}': {e}"
+                )
+
+    # Save the filled PDF
+    # Use deflate=True for smaller output; garbage=3 cleans unreferenced objects
+    doc.save(output_path, deflate=True, garbage=3)
+    doc.close()
+
+    logger.info(f"Filled PDF: {output_path} ({filled_count} widgets)")
+    return output_path
+
+
 def generate_filled_document(
     template_path: str, file_type: str, fill_data: dict
 ) -> str:
@@ -80,5 +128,7 @@ def generate_filled_document(
         except Exception:
             # Fallback to regex-based replacement
             return fill_docx_regex(template_path, fill_data)
+    elif file_type == "pdf":
+        return fill_pdf(template_path, fill_data)
     else:
         raise ValueError(f"Document generation not supported for: {file_type}")

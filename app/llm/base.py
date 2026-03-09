@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 
 class LLMAdapter(ABC):
@@ -6,6 +7,14 @@ class LLMAdapter(ABC):
     async def generate_text(self, prompt: str, **kwargs) -> str:
         """Generate free-form text response."""
         ...
+
+    @abstractmethod
+    async def generate_text_stream(
+        self, prompt: str, **kwargs
+    ) -> AsyncIterator[str]:
+        """Generate text response as an async stream of string chunks."""
+        ...
+        yield ""  # pragma: no cover — make this a valid async generator
 
     @abstractmethod
     async def generate_json(self, prompt: str, schema: dict | None = None) -> dict | list:

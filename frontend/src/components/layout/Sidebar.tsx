@@ -3,9 +3,13 @@ import { cn } from "../../utils/cn";
 
 const navItems = [
   { to: "/", label: "表單填寫", icon: "📝" },
+  { to: "/chat", label: "知識問答", icon: "💬" },
+  { to: "/email", label: "郵件草稿", icon: "✉️" },
+  { to: "/report", label: "報告生成", icon: "📊" },
   { to: "/history", label: "填寫歷史", icon: "📋" },
   { to: "/profile", label: "個人資料", icon: "👤" },
   { to: "/knowledge", label: "知識庫", icon: "📚" },
+  { to: "/indexing", label: "自動索引", icon: "🔍" },
 ];
 
 export default function Sidebar() {

@@ -17,6 +17,13 @@ async def save_upload_file(upload_file: UploadFile, upload_dir: str) -> str:
 
 
 def detect_file_type(filename: str) -> str:
-    """Return 'docx', 'pdf', or 'unknown' based on file extension."""
+    """Return file type based on extension. Supports docx, pdf, txt, md, pptx, xlsx."""
     ext = Path(filename).suffix.lower()
-    return {".docx": "docx", ".pdf": "pdf"}.get(ext, "unknown")
+    return {
+        ".docx": "docx",
+        ".pdf": "pdf",
+        ".txt": "txt",
+        ".md": "md",
+        ".pptx": "pptx",
+        ".xlsx": "xlsx",
+    }.get(ext, "unknown")
