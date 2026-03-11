@@ -264,7 +264,7 @@ class TestGenerateFieldContentNormal:
                 collection_name="research_projects",
             )
 
-        mock_search.assert_called_once_with("quantum computing", "research_projects", n_results=5)
+        mock_search.assert_called_once_with("quantum computing", "research_projects", n_results=5, user_id=None)
 
     @pytest.mark.asyncio
     async def test_generate_text_called_with_temperature(self):
@@ -515,7 +515,7 @@ class TestGenerateFieldContentParameters:
                 "field", "query", collection_name="auto_indexed"
             )
 
-        mock_search.assert_called_once_with("query", "auto_indexed", n_results=5)
+        mock_search.assert_called_once_with("query", "auto_indexed", n_results=5, user_id=None)
 
     @pytest.mark.asyncio
     async def test_default_collection_name(self):
@@ -529,7 +529,7 @@ class TestGenerateFieldContentParameters:
              patch("app.services.rag_pipeline.get_llm_adapter", return_value=adapter):
             await generate_field_content("field", "query")
 
-        mock_search.assert_called_once_with("query", "academic_papers", n_results=5)
+        mock_search.assert_called_once_with("query", "academic_papers", n_results=5, user_id=None)
 
     @pytest.mark.asyncio
     async def test_custom_language_in_prompt(self):

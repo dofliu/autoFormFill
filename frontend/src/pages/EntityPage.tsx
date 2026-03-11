@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import * as entitiesApi from "../api/entities";
+import { useAuth } from "../contexts/AuthContext";
 import type { Entity, EntityCreate } from "../types/entity";
 
 const ENTITY_TYPES = ["person", "organization", "project"];
 
 export default function EntityPage() {
-  const userId = Number(localStorage.getItem("smartfill_user_id") || "1");
+  const { user } = useAuth();
+  const userId = user?.id ?? 1;
 
   const [entities, setEntities] = useState<Entity[]>([]);
   const [selected, setSelected] = useState<Entity | null>(null);

@@ -41,15 +41,22 @@ async def search_all_collections(
     query: str,
     collections: list[str] | None = None,
     n_results: int = 5,
+    user_id: int | None = None,
 ) -> list[SourceChunk]:
     """Search across multiple ChromaDB collections in parallel.
+
+    Args:
+        query: Natural language search query.
+        collections: Which collections to search (None = all).
+        n_results: Max results to return (after merging).
+        user_id: Filter by owner — ``None`` means no filtering (dev mode).
 
     Returns the top *n_results* chunks sorted by ascending distance.
     """
     target = collections or COLLECTIONS
 
     tasks = [
-        search_documents(query, col, n_results=n_results)
+        search_documents(query, col, n_results=n_results, user_id=user_id)
         for col in target
     ]
     results_per_col = await asyncio.gather(*tasks, return_exceptions=True)
@@ -141,6 +148,7 @@ async def rag_sse_stream(
     config: StreamConfig = StreamConfig(),
     collections: list[str] | None = None,
     n_results: int = 5,
+    user_id: int | None = None,
 ) -> AsyncIterator[str]:
     """Shared RAG-to-SSE streaming pipeline.
 
@@ -157,12 +165,13 @@ async def rag_sse_stream(
         config: LLM streaming parameters (temperature, max_tokens).
         collections: Which ChromaDB collections to search (None = all).
         n_results: Number of search results to retrieve.
+        user_id: Filter search by owner — ``None`` = no filtering (dev mode).
 
     Yields:
         SSE-formatted strings: sources → chunk(s) → done/error.
     """
     # 1. Search knowledge base
-    sources = await search_all_collections(search_query, collections, n_results)
+    sources = await search_all_collections(search_query, collections, n_results, user_id=user_id)
 
     # 2. Emit sources event
     sources_data = [s.model_dump() for s in sources]

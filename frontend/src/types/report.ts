@@ -7,4 +7,5 @@ export interface ReportRequest {
   language?: "zh-TW" | "en";
   collections?: string[];
   n_results?: number;
+  user_id?: number;
 }

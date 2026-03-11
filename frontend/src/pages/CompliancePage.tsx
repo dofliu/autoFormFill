@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import * as complianceApi from "../api/compliance";
+import { useAuth } from "../contexts/AuthContext";
 import type {
   ComplianceRule,
   ComplianceRuleCreate,
@@ -20,7 +21,8 @@ const SEVERITIES = [
 ];
 
 export default function CompliancePage() {
-  const userId = Number(localStorage.getItem("smartfill_user_id") || "1");
+  const { user } = useAuth();
+  const userId = user?.id ?? 1;
 
   const [rules, setRules] = useState<ComplianceRule[]>([]);
   const [loading, setLoading] = useState(true);

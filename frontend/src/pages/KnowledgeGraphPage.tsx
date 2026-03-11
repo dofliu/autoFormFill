@@ -4,6 +4,7 @@ import type { ForceGraphMethods } from "react-force-graph-2d";
 import * as entityRelationsApi from "../api/entityRelations";
 import * as entitiesApi from "../api/entities";
 import AddRelationModal from "../components/AddRelationModal";
+import { useAuth } from "../contexts/AuthContext";
 import type { Entity } from "../types/entity";
 import type { GraphData, GraphNode } from "../types/entityRelation";
 
@@ -26,7 +27,8 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function KnowledgeGraphPage() {
-  const userId = Number(localStorage.getItem("smartfill_user_id") || "1");
+  const { user } = useAuth();
+  const userId = user?.id ?? 1;
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
 

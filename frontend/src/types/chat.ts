@@ -19,6 +19,7 @@ export interface ChatRequest {
   history: { role: string; content: string }[];
   collections?: string[];
   n_results?: number;
+  user_id?: number;
 }
 
 // --- SSE event types ---

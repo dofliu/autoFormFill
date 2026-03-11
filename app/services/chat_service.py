@@ -71,8 +71,12 @@ async def chat_stream(
     history: list[ChatMessage],
     collections: list[str] | None = None,
     n_results: int = 5,
+    user_id: int | None = None,
 ) -> AsyncIterator[str]:
     """Main chat orchestrator: search → build prompt → stream LLM response.
+
+    Args:
+        user_id: Filter search results by owner — ``None`` = no filtering.
 
     Yields SSE-formatted strings (``data: {json}\\n\\n``).
     """
@@ -87,5 +91,6 @@ async def chat_stream(
         config=StreamConfig(temperature=0.3, max_tokens=2048),
         collections=collections,
         n_results=n_results,
+        user_id=user_id,
     ):
         yield event

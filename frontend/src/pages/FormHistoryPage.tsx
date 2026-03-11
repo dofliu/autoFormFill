@@ -1,15 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getFormHistory } from "../api/forms";
+import { useAuth } from "../contexts/AuthContext";
 import type { FormHistoryItem } from "../types/form";
 
 export default function FormHistoryPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [history, setHistory] = useState<FormHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const userId = parseInt(localStorage.getItem("smartfill_user_id") || "0");
+  const userId = user?.id ?? 0;
 
   useEffect(() => {
     if (userId) {

@@ -4,7 +4,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_current_user, verify_ownership
 from app.database import get_db
+from app.models.user_profile import UserProfile
 from app.schemas.error import ERR_NOT_FOUND, ERR_VALIDATION
 from app.schemas.reminder import (
     FillDiffResult,
@@ -35,8 +37,10 @@ async def create_reminder(
     user_id: int,
     data: ReminderCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Create a new reminder."""
+    verify_ownership(current_user, user_id)
     reminder = await reminder_service.create_reminder(db, user_id, data)
     return _reminder_response(reminder)
 
@@ -48,8 +52,10 @@ async def list_reminders(
     reminder_type: str | None = Query(None, description="Filter by type: deadline, fill_diff, manual"),
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """List reminders for a user."""
+    verify_ownership(current_user, user_id)
     reminders = await reminder_service.list_reminders(
         db, user_id, status=status, reminder_type=reminder_type, limit=limit
     )
@@ -60,8 +66,10 @@ async def list_reminders(
 async def count_active(
     user_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Get count of active (unread) reminders."""
+    verify_ownership(current_user, user_id)
     count = await reminder_service.count_active_reminders(db, user_id)
     return {"count": count}
 
@@ -71,8 +79,10 @@ async def get_reminder(
     user_id: int,
     reminder_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Get a single reminder."""
+    verify_ownership(current_user, user_id)
     reminder = await reminder_service.get_reminder(db, reminder_id)
     if not reminder or reminder.user_id != user_id:
         raise HTTPException(
@@ -88,8 +98,10 @@ async def update_reminder(
     reminder_id: int,
     data: ReminderUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Update a reminder (e.g. mark as read/dismissed)."""
+    verify_ownership(current_user, user_id)
     existing = await reminder_service.get_reminder(db, reminder_id)
     if not existing or existing.user_id != user_id:
         raise HTTPException(
@@ -104,8 +116,10 @@ async def update_reminder(
 async def dismiss_all(
     user_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Dismiss all active reminders."""
+    verify_ownership(current_user, user_id)
     count = await reminder_service.dismiss_all(db, user_id)
     return {"dismissed": count}
 
@@ -115,8 +129,10 @@ async def delete_reminder(
     user_id: int,
     reminder_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Delete a reminder."""
+    verify_ownership(current_user, user_id)
     existing = await reminder_service.get_reminder(db, reminder_id)
     if not existing or existing.user_id != user_id:
         raise HTTPException(
@@ -133,8 +149,10 @@ async def get_fill_diff(
     user_id: int,
     job_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Compare a job's fill results against the previous fill of the same template."""
+    verify_ownership(current_user, user_id)
     job = await job_store.get_job(job_id, db)
     if not job:
         raise HTTPException(

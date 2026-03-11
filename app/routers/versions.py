@@ -4,7 +4,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_current_user, verify_ownership
 from app.database import get_db
+from app.models.user_profile import UserProfile
 from app.schemas.error import ERR_NOT_FOUND, ERR_VALIDATION
 from app.schemas.version import (
     DiffResult,
@@ -30,8 +32,10 @@ def _version_response(ver) -> DocumentVersionResponse:
 async def list_tracked_files(
     user_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """List all files with version tracking, showing latest version info."""
+    verify_ownership(current_user, user_id)
     return await version_service.list_tracked_files(db, user_id)
 
 
@@ -40,8 +44,10 @@ async def list_versions(
     user_id: int,
     file_path: str | None = Query(None, description="Filter by file path"),
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """List all document versions for a user, optionally filtered by file path."""
+    verify_ownership(current_user, user_id)
     versions = await version_service.list_versions(db, user_id, file_path=file_path)
     return [_version_response(v) for v in versions]
 
@@ -51,8 +57,10 @@ async def get_version(
     user_id: int,
     version_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Get a single document version."""
+    verify_ownership(current_user, user_id)
     ver = await version_service.get_version(db, version_id)
     if not ver or ver.user_id != user_id:
         raise HTTPException(
@@ -68,8 +76,10 @@ async def update_version(
     version_id: int,
     data: DocumentVersionUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Update version metadata (label)."""
+    verify_ownership(current_user, user_id)
     existing = await version_service.get_version(db, version_id)
     if not existing or existing.user_id != user_id:
         raise HTTPException(
@@ -85,8 +95,10 @@ async def delete_version(
     user_id: int,
     version_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Delete a single version."""
+    verify_ownership(current_user, user_id)
     existing = await version_service.get_version(db, version_id)
     if not existing or existing.user_id != user_id:
         raise HTTPException(
@@ -102,8 +114,10 @@ async def diff_versions(
     old_version_id: int,
     new_version_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Compare two document versions and return a line-level diff."""
+    verify_ownership(current_user, user_id)
     # Verify ownership
     old_ver = await version_service.get_version(db, old_version_id)
     if not old_ver or old_ver.user_id != user_id:

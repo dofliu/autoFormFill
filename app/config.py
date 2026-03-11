@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # Phase 4: Chat
     chat_context_rounds: int = 5  # Number of conversation rounds to keep as LLM context
 
+    # Phase 6.1: Authentication
+    auth_enabled: bool = True  # Set to False to disable JWT auth (dev mode)
+    jwt_secret_key: str = "CHANGE-ME-IN-PRODUCTION"  # Secret for signing JWT tokens
+    jwt_algorithm: str = "HS256"  # JWT signing algorithm
+    jwt_access_token_expire_hours: int = 24  # Access token lifetime in hours
+    jwt_refresh_token_expire_days: int = 7  # Refresh token lifetime in days
+
     def get_watch_dirs(self) -> list[str]:
         """Parse WATCH_DIRS into a list of resolved absolute paths."""
         if not self.watch_dirs.strip():

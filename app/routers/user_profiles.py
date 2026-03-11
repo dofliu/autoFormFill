@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_current_user, verify_ownership
 from app.database import get_db
+from app.models.user_profile import UserProfile
 from app.schemas.user_profile import (
     UserProfileCreate,
     UserProfileResponse,
@@ -23,7 +25,12 @@ async def list_users(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{user_id}", response_model=UserProfileResponse)
-async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
+async def get_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
+):
+    verify_ownership(current_user, user_id)
     user = await user_service.get_user(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")
@@ -32,8 +39,12 @@ async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.put("/{user_id}", response_model=UserProfileResponse)
 async def update_user(
-    user_id: int, data: UserProfileUpdate, db: AsyncSession = Depends(get_db)
+    user_id: int,
+    data: UserProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
+    verify_ownership(current_user, user_id)
     user = await user_service.update_user(db, user_id, data)
     if not user:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")
@@ -41,7 +52,12 @@ async def update_user(
 
 
 @router.delete("/{user_id}", status_code=204)
-async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
+):
+    verify_ownership(current_user, user_id)
     deleted = await user_service.delete_user(db, user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")

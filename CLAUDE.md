@@ -40,6 +40,9 @@ npm run dev
 - **Job Store**：`app/job_store.py` 為 async 介面，優先使用 SQLite 持久化（`FormJob` ORM + `job_service.py`），無 db session 時 fallback 為 in-memory
 - **Pydantic Settings**：`app/config.py` 使用 `pydantic-settings` 從 `.env` 載入設定
 - **ORM 模型註冊**：`main.py` 中必須 import 所有 ORM 模型，否則 `init_db()` 不會建表
+- **認證架構**：JWT（PyJWT）+ RBAC 三級角色（admin/user/viewer），`AUTH_ENABLED` env var 控制開關
+- **認證依賴**：`get_current_user` → `require_auth` → `require_admin`，`verify_ownership(current_user, user_id)` 驗證資源所有權
+- **多使用者隔離**：ChromaDB metadata-based 過濾（`user_id` + `shared` 欄位），Router 解析 user_id（auth token 優先 > request body）
 
 ### 前端
 
@@ -48,7 +51,8 @@ npm run dev
 - **postForm vs post**：`postForm()` 用於 FormData（multipart），`post()` 用於 JSON body
 - **TypeScript 設定**：啟用 `erasableSyntaxOnly`，禁止 class constructor parameter properties（使用標準屬性宣告）
 - **欄位色碼**：🟢 `sql` = green / 🟡 `rag` = amber / 🔴 `skip` = red / 🔵 `override` = blue
-- **localStorage**：`smartfill_user_id` 儲存選取的使用者 ID
+- **認證狀態**：`AuthContext` + `useAuth()` hook 管理 JWT token + user 狀態，localStorage 存 `smartfill_access_token` / `smartfill_refresh_token` / `smartfill_user`
+- **路由守衛**：`ProtectedRoute` 元件包裹需認證的頁面，未登入自動跳轉 `/login`
 
 ### 命名規則
 
@@ -62,6 +66,10 @@ npm run dev
 | 檔案 | 角色 |
 |------|------|
 | `main.py` | 應用進入點、CORS、路由註冊、lifespan |
+| `app/auth/security.py` | 密碼 hash + JWT token 工具（PyJWT + passlib） |
+| `app/auth/dependencies.py` | FastAPI 認證依賴注入（get_current_user, require_auth, verify_ownership） |
+| `app/routers/auth.py` | 認證 API（register, login, refresh, me） |
+| `app/schemas/auth.py` | 認證 Pydantic schemas（RegisterRequest, TokenResponse 等） |
 | `app/services/form_filler.py` | 核心流程編排器（解析→路由→檢索→生成→輸出） |
 | `app/services/document_generator.py` | 文件填寫（docx 模板 + PDF AcroForm widget） |
 | `app/services/intent_router.py` | LLM 欄位分類（SQL_DB / VECTOR_DB / SKIP） |
@@ -112,13 +120,22 @@ npm run dev
 | `frontend/src/pages/CompliancePage.tsx` | 合規規則管理 UI（CRUD + 開關 + 嚴重等級色碼） |
 | `frontend/src/pages/VersionPage.tsx` | 版本追蹤 UI（檔案側欄 + 版本歷史 + diff viewer） |
 | `frontend/src/pages/ReminderPage.tsx` | 智能提醒 UI（篩選標籤 + 優先順序 + 新增表單） |
+| `frontend/src/contexts/AuthContext.tsx` | React 認證 Context + useAuth() hook |
+| `frontend/src/pages/LoginPage.tsx` | 登入頁面 |
+| `frontend/src/pages/RegisterPage.tsx` | 註冊頁面 |
+| `frontend/src/components/ProtectedRoute.tsx` | 路由守衛元件 |
 | `frontend/src/components/ErrorBoundary.tsx` | 全域 React Error Boundary |
+| `scripts/migrate_chroma_metadata.py` | ChromaDB metadata migration（Phase 6.2 多使用者隔離） |
 | `frontend/vite.config.ts` | Vite 設定（proxy、plugins） |
 
 ## API 路由總覽
 
 ```
 GET    /health                                  健康檢查
+POST   /api/v1/auth/register                    使用者註冊
+POST   /api/v1/auth/login                       登入（回傳 JWT）
+POST   /api/v1/auth/refresh                     刷新 access token
+GET    /api/v1/auth/me                          當前使用者資訊
 POST   /api/v1/users/                           建立使用者
 GET    /api/v1/users/                           列出使用者
 GET    /api/v1/users/{id}                       使用者詳情
@@ -186,11 +203,13 @@ GET    /api/v1/users/{id}/reminders/fill-diff/{job_id}  填寫差異比對
 4. **erasableSyntaxOnly**：TypeScript class 不能用 `constructor(public x: number)`，要用 `x: number; constructor(x) { this.x = x; }`
 5. **`[需人工補充]`**：RAG/SQL 無法填寫的欄位會以此標記，前端以紅色顯示
 6. **Port 衝突**：Vite 若偵測 5173 被占用會自動跳 5174，CORS 已設定兩個 port
+7. **AUTH_ENABLED**：測試預設 `AUTH_ENABLED=False`（`tests/conftest.py`），直接呼叫 router 函式的測試需傳入 `current_user=None`
+8. **user_id 穿透**：所有 service 函式的 `user_id` 參數預設 `None`（向後相容），測試中 `assert_called_with()` 需包含 `user_id=None`
 
 ## 測試
 
 ```bash
-# 後端測試（374 tests）
+# 後端測試（430 tests）
 python -m pytest tests/ -v
 
 # 前端型別檢查
@@ -221,6 +240,8 @@ cd frontend && npm run build
 | `tests/test_compliance.py` | 33 | ComplianceRule model + schema + field match + rule check + compliance engine + router |
 | `tests/test_version_tracking.py` | 15 | DocumentVersion model + schema + diff engine + service + router |
 | `tests/test_reminders.py` | 32 | Reminder model + schema + fill diff + date extraction + service + constants |
+| `tests/test_auth.py` | 29 | 密碼 hash + JWT token + auth schemas + router endpoints + dependencies + model fields |
+| `tests/test_multi_user_isolation.py` | 27 | metadata 建構 + search 過濾 + user_id 穿透 + schema + router 解析 + 跨使用者隔離 |
 
 ## 環境變數
 
@@ -241,6 +262,11 @@ cd frontend && npm run build
 | `AUTO_INDEX_COLLECTION` | `auto_indexed` | 自動索引用的 ChromaDB 集合 |
 | `SUPPORTED_EXTENSIONS` | `.docx,.pdf,.txt,.md,.pptx,.xlsx` | 支援索引的副檔名 |
 | `CHAT_CONTEXT_ROUNDS` | `5` | Chat 對話保留最近 N 輪作為 LLM context |
+| `AUTH_ENABLED` | `True` | 認證開關（`False` 跳過 JWT 驗證，dev 模式） |
+| `JWT_SECRET_KEY` | `CHANGE-ME-IN-PRODUCTION` | JWT 簽名密鑰 |
+| `JWT_ALGORITHM` | `HS256` | JWT 演算法 |
+| `JWT_ACCESS_TOKEN_EXPIRE_HOURS` | `24` | Access token 有效期（小時） |
+| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token 有效期（天） |
 
 ---
 
@@ -256,17 +282,17 @@ cd frontend && npm run build
 | Phase 3 | ✅ 完成 | 知識引擎基礎：~~資料夾監控~~✅ ~~增量索引~~✅ ~~索引 API+UI~~✅ ~~多格式~~✅ ~~Entity 泛化~~✅ |
 | Phase 4 | ✅ 完成 | 多輸出適配器：~~Chat 問答~~✅、~~郵件草稿~~✅、~~報告生成~~✅、~~Adapter 抽象~~✅ |
 | Phase 5 | ✅ 完成 | 智能化：~~知識圖譜~~✅、~~合規檢查~~✅、~~版本追蹤~~✅、~~智能提醒~~✅ |
-| Phase 6 | ⬜ 規劃 | 協作與部署：多使用者、權限、Docker |
+| Phase 6.1 | ✅ 完成 | 認證與權限：JWT + RBAC（admin/user/viewer）+ 前端 Auth 系統 |
+| Phase 6.2 | ✅ 完成 | 多使用者隔離：ChromaDB metadata 過濾 + user_id 穿透全鏈路 |
+| Phase 6.3-6.4 | ⬜ 規劃 | Docker 部署、CI/CD |
 
 ### 下一步優先級
 
 > 以下為尚未完成的任務，依建議優先順序排列。
 > 已完成項目（Phase 1-5）詳見 `docs/TODO.md`。
 
-1. **Phase 6.1** — 認證與權限（JWT + RBAC）
-2. **Phase 6.2** — 多使用者隔離
-3. **Phase 6.3** — Docker 部署
-4. **Phase 6.4** — CI/CD
+1. **Phase 6.3** — Docker 部署
+2. **Phase 6.4** — CI/CD
 
 ### 架構演進方向
 

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -33,5 +35,9 @@ class UserProfileResponse(BaseModel):
     email: str | None = None
     phone_office: str | None = None
     address: str | None = None
+    # Phase 6.1: Authentication fields
+    role: str = "user"
+    is_active: bool = True
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}

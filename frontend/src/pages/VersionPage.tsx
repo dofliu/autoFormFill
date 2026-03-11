@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import * as versionsApi from "../api/versions";
+import { useAuth } from "../contexts/AuthContext";
 import type { DocumentVersion, DiffResult, TrackedFile } from "../types/version";
 
 export default function VersionPage() {
-  const userId = Number(localStorage.getItem("smartfill_user_id") || "1");
+  const { user } = useAuth();
+  const userId = user?.id ?? 1;
 
   const [trackedFiles, setTrackedFiles] = useState<TrackedFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string>("");

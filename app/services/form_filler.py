@@ -1,8 +1,10 @@
 import os
+import shutil
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.schemas.form import FieldFillResult, FormFillResponse
 from app.services import document_generator, entity_service, form_parser, user_service
 from app.services.intent_router import route_fields
@@ -74,6 +76,7 @@ async def fill_form(
             generated, confidence = await generate_field_content(
                 field_name=field_name,
                 search_query=route.search_query,
+                user_id=user_id,
             )
             fill_data[field_name] = generated
             results.append(
@@ -96,7 +99,15 @@ async def fill_form(
                 )
             )
 
-    # Step 5: Generate filled document
+    # Step 5: Save a persistent copy of the blank template so that
+    # submit_form_with_overrides can re-generate the document later
+    # (the upload temp file is deleted by the router after this call returns).
+    ext = os.path.splitext(file_path)[1]
+    template_copy_name = f"tpl_{uuid.uuid4().hex[:8]}{ext}"
+    template_copy_path = os.path.join(settings.output_dir, template_copy_name)
+    shutil.copy2(file_path, template_copy_path)
+
+    # Step 6: Generate filled document
     output_path = document_generator.generate_filled_document(
         file_path, file_type, fill_data
     )
@@ -108,6 +119,7 @@ async def fill_form(
     job_data = {
         "filename": original_filename,
         "template_filename": os.path.basename(file_path),
+        "template_path": template_copy_path,
         "user_id": user_id,
         "fields": [r.dict() for r in results],
         "fill_data": fill_data,
@@ -175,22 +187,27 @@ async def submit_form_with_overrides(
     job = await job_store.get_job(job_id, db)
     if not job:
         raise ValueError(f"Job {job_id} not found")
-    
-    # Get the original template file path
-    template_filename = job["template_filename"]
-    template_path = os.path.join("data", "uploads", template_filename)
-    
-    if not os.path.exists(template_path):
-        raise ValueError(f"Template file not found: {template_path}")
-    
-    # Run fill_form again with new overrides
-    # Merge existing overrides with new ones
+
+    # Use the persistent template copy saved at fill time.
+    # Fall back to the legacy uploads path for jobs created before this fix.
+    template_path = job.get("template_path")
+    if not template_path or not os.path.exists(template_path):
+        legacy_path = os.path.join("data", "uploads", job["template_filename"])
+        if os.path.exists(legacy_path):
+            template_path = legacy_path
+        else:
+            raise ValueError(
+                f"Template file not found for job {job_id}. "
+                "Please re-upload and re-fill the form."
+            )
+
+    # Merge existing overrides with the new ones
     existing_overrides = job.get("field_overrides", {})
     all_overrides = {**existing_overrides, **field_overrides}
-    
+
     return await fill_form(
         file_path=template_path,
-        file_type=os.path.splitext(template_filename)[1].lstrip('.'),
+        file_type=os.path.splitext(job["template_filename"])[1].lstrip("."),
         original_filename=job["filename"],
         user_id=job["user_id"],
         db=db,

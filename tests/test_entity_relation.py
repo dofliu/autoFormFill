@@ -412,7 +412,7 @@ class TestRouterIntegration:
         )
         with pytest.raises(HTTPException) as exc_info:
             mock_db = AsyncMock()
-            await create_relation(user_id=1, data=data, db=mock_db)
+            await create_relation(user_id=1, data=data, db=mock_db, current_user=None)
         assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
@@ -430,7 +430,7 @@ class TestRouterIntegration:
             mock_svc.get_entity = AsyncMock(return_value=None)
 
             with pytest.raises(HTTPException) as exc_info:
-                await create_relation(user_id=1, data=data, db=mock_db)
+                await create_relation(user_id=1, data=data, db=mock_db, current_user=None)
             assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
@@ -448,7 +448,7 @@ class TestRouterIntegration:
             mock_entity_svc.delete_entity = AsyncMock(return_value=True)
             mock_rel_svc.delete_relations_for_entity = AsyncMock(return_value=3)
 
-            await delete_entity(user_id=1, entity_id=10, db=mock_db)
+            await delete_entity(user_id=1, entity_id=10, db=mock_db, current_user=None)
 
             mock_rel_svc.delete_relations_for_entity.assert_awaited_once_with(mock_db, 10)
             mock_entity_svc.delete_entity.assert_awaited_once_with(mock_db, 10)

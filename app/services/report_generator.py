@@ -117,8 +117,12 @@ async def report_stream(
     language: str = "zh-TW",
     collections: list[str] | None = None,
     n_results: int = 8,
+    user_id: int | None = None,
 ) -> AsyncIterator[str]:
     """Generate a structured report via RAG + SSE streaming.
+
+    Args:
+        user_id: Filter search results by owner — ``None`` = no filtering.
 
     Yields SSE-formatted strings:
     - ``{"type": "sources", "sources": [...]}``
@@ -142,5 +146,6 @@ async def report_stream(
         config=StreamConfig(temperature=0.3, max_tokens=4096),
         collections=collections,
         n_results=n_results,
+        user_id=user_id,
     ):
         yield event

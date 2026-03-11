@@ -21,6 +21,7 @@ async def create_job(db: AsyncSession, job_data: dict) -> str:
         user_id=job_data["user_id"],
         filename=job_data.get("filename", ""),
         template_filename=job_data.get("template_filename", ""),
+        template_path=job_data.get("template_path"),
         output_path=job_data.get("output_path", ""),
         fields_json=json.dumps(job_data.get("fields", []), ensure_ascii=False),
         fill_data_json=json.dumps(job_data.get("fill_data", {}), ensure_ascii=False),

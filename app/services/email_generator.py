@@ -75,8 +75,12 @@ async def email_draft_stream(
     tone: str = "professional",
     collections: list[str] | None = None,
     n_results: int = 5,
+    user_id: int | None = None,
 ) -> AsyncIterator[str]:
     """Main email draft orchestrator: search → build prompt → stream LLM.
+
+    Args:
+        user_id: Filter search results by owner — ``None`` = no filtering.
 
     Yields SSE-formatted strings (``data: {json}\\n\\n``).
     """
@@ -98,5 +102,6 @@ async def email_draft_stream(
         config=StreamConfig(temperature=0.4, max_tokens=2048),
         collections=collections,
         n_results=n_results,
+        user_id=user_id,
     ):
         yield event

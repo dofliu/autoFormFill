@@ -1,5 +1,6 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { cn } from "../../utils/cn";
+import { useAuth } from "../../contexts/AuthContext";
 
 const navItems = [
   { to: "/", label: "表單填寫", icon: "📝" },
@@ -18,13 +19,21 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  function handleLogout() {
+    logout();
+    navigate("/login");
+  }
+
   return (
     <aside className="w-56 shrink-0 border-r border-gray-200 bg-gray-50 flex flex-col">
       <div className="px-5 py-5 border-b border-gray-200">
         <h1 className="text-lg font-bold text-gray-800">SmartFill</h1>
         <p className="text-xs text-gray-500">智能學術表單填寫</p>
       </div>
-      <nav className="flex-1 py-3">
+      <nav className="flex-1 py-3 overflow-y-auto">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -44,8 +53,27 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="px-5 py-3 border-t border-gray-200 text-xs text-gray-400">
-        v0.1.0
+
+      {/* User info + logout */}
+      <div className="px-4 py-3 border-t border-gray-200">
+        {user && (
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-gray-700 truncate">
+                {user.name_zh || user.name_en || user.email}
+              </p>
+              <p className="text-xs text-gray-400 truncate">{user.email}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="ml-2 shrink-0 text-xs text-gray-400 hover:text-red-500 transition-colors"
+              title="登出"
+            >
+              登出
+            </button>
+          </div>
+        )}
+        <p className="text-xs text-gray-300 mt-2">v0.1.0</p>
       </div>
     </aside>
   );

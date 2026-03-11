@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import * as remindersApi from "../api/reminders";
+import { useAuth } from "../contexts/AuthContext";
 import type { Reminder, ReminderCreate } from "../types/reminder";
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -27,7 +28,8 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 export default function ReminderPage() {
-  const userId = Number(localStorage.getItem("smartfill_user_id") || "1");
+  const { user } = useAuth();
+  const userId = user?.id ?? 1;
 
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [filter, setFilter] = useState<"all" | "active" | "read" | "dismissed">("all");

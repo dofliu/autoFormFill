@@ -170,6 +170,9 @@ async def index_file(file_path: str) -> dict:
             "file_path": file_path,
             "filename": filename,
             "file_type": file_type,
+            # Multi-user isolation: auto-indexed files are shared (visible to all)
+            "user_id": "-1",
+            "shared": "true",
         }
         for _ in chunks
     ]

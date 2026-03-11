@@ -11,3 +11,4 @@ class ReportRequest(BaseModel):
     language: str = "zh-TW"  # "zh-TW" | "en"
     collections: list[str] | None = None
     n_results: int = 8  # Reports need more context than chat/email
+    user_id: int | None = None  # fallback when AUTH_ENABLED=False

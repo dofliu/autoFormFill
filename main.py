@@ -5,11 +5,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.config import settings
-from app.database import init_db
+from app.database import engine, init_db
 from app.models import UserProfile, EducationExperience, Entity, EntityRelation, FormJob, FileIndex, ComplianceRule, DocumentVersion, Reminder  # noqa: F401 — register ORM models
-from app.routers import chat, compliance, documents, education_experience, email, entities, entity_relations, forms, indexing, reminders, report, user_profiles, versions
+from app.routers import auth, chat, compliance, documents, education_experience, email, entities, entity_relations, forms, indexing, reminders, report, user_profiles, versions
 from app.schemas.error import ERR_INTERNAL
 from app.services.file_watcher import file_watcher
 from app.vector_store import init_vector_store
@@ -23,6 +24,17 @@ async def lifespan(app: FastAPI):
     for dir_path in [settings.upload_dir, settings.output_dir]:
         os.makedirs(dir_path, exist_ok=True)
     await init_db()
+
+    # Incremental schema migration: add columns that may be missing in older DBs
+    async with engine.begin() as conn:
+        for ddl in [
+            "ALTER TABLE form_jobs ADD COLUMN template_path TEXT",
+        ]:
+            try:
+                await conn.execute(text(ddl))
+            except Exception:
+                pass  # Column already exists — safe to ignore
+
     init_vector_store()
 
     # Start file watcher for auto-indexing (Phase 3)
@@ -55,6 +67,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(user_profiles.router)
 app.include_router(education_experience.router)
 app.include_router(entities.router)

@@ -6,8 +6,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_current_user, verify_ownership
 from app.config import settings
 from app.database import get_db
+from app.models.user_profile import UserProfile
 from app.schemas.error import ERR_FILE_UNSUPPORTED, ERR_INTERNAL, ERR_LLM_UNAVAILABLE, ERR_NOT_FOUND, ERR_VALIDATION
 from app.schemas.form import FormFillResponse, FormParseResponse, FormPreviewResponse, FormSubmitRequest, FieldFillResult
 from app.services import form_parser
@@ -54,8 +56,10 @@ async def fill_form(
     file: UploadFile = File(...),
     user_id: int = Form(...),
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Upload a form, auto-fill using user data + RAG, return filled document."""
+    verify_ownership(current_user, user_id)
     file_type = detect_file_type(file.filename or "")
     if file_type == "unknown":
         raise HTTPException(
@@ -163,8 +167,14 @@ class FormHistoryItem(BaseModel):
 
 
 @router.get("/history/{user_id}", response_model=list[FormHistoryItem])
-async def get_form_history(user_id: int, limit: int = 20, db: AsyncSession = Depends(get_db)):
+async def get_form_history(
+    user_id: int,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
+):
     """Get form filling history for a user."""
+    verify_ownership(current_user, user_id)
     jobs = await job_store.get_jobs_by_user(user_id, limit, db)
 
     return [
@@ -181,8 +191,15 @@ async def get_form_history(user_id: int, limit: int = 20, db: AsyncSession = Dep
 
 
 @router.get("/history/{user_id}/similar/{template_filename}", response_model=list[FormHistoryItem])
-async def get_similar_forms(user_id: int, template_filename: str, limit: int = 10, db: AsyncSession = Depends(get_db)):
+async def get_similar_forms(
+    user_id: int,
+    template_filename: str,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
+):
     """Get similar forms that used the same template."""
+    verify_ownership(current_user, user_id)
     jobs = await job_store.get_jobs_by_template(template_filename, user_id, limit, db)
 
     return [

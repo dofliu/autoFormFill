@@ -123,7 +123,7 @@ class TestSearchAllCollections:
         """Should only search specified collections."""
         mock_search.return_value = []
         await search_all_collections("test", collections=["custom_col"])
-        mock_search.assert_called_once_with("test", "custom_col", n_results=5)
+        mock_search.assert_called_once_with("test", "custom_col", n_results=5, user_id=None)
 
     @pytest.mark.asyncio
     @patch("app.services.sse_pipeline.search_documents", new_callable=AsyncMock)
@@ -377,7 +377,7 @@ class TestRagSseStream:
             )
         )
 
-        mock_search.assert_called_once_with("my query", ["special"], 12)
+        mock_search.assert_called_once_with("my query", ["special"], 12, user_id=None)
 
     @pytest.mark.asyncio
     @patch("app.services.sse_pipeline.get_llm_adapter")

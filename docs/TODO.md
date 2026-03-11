@@ -1,6 +1,6 @@
 # SmartFill-Scholar — 任務追蹤
 
-> 最後更新：2026-03-12
+> 最後更新：2026-03-12（Bug Fix Session）
 > 使用方式：完成任務後將 `[ ]` 改為 `[x]`，git commit 即可追蹤進度
 
 ---
@@ -254,15 +254,45 @@
 > 依賴：Phase 5 部分功能完成
 > 參考：`docs/ROADMAP.md` Phase 6 章節
 
-### 6.1 認證與權限 `P0`
-- [ ] JWT 認證 middleware
-- [ ] RBAC: admin / user / viewer
-- [ ] API key 支援
+### 6.1 認證與權限 `P0` ✅
+- [x] JWT 認證（PyJWT + passlib/bcrypt）
+  - `app/auth/security.py` — hash_password, verify_password, create_access_token, create_refresh_token, decode_token
+  - `app/auth/dependencies.py` — get_current_user, require_auth, require_admin, verify_ownership
+- [x] RBAC: admin / user / viewer（三級角色）
+  - UserProfile 擴展：password_hash, role, is_active, created_at, email unique
+- [x] Auth Router（`app/routers/auth.py`）
+  - `POST /api/v1/auth/register` — 註冊
+  - `POST /api/v1/auth/login` — 登入
+  - `POST /api/v1/auth/refresh` — 刷新 token
+  - `GET /api/v1/auth/me` — 當前使用者
+- [x] 保護現有 14 個 router（verify_ownership 注入）
+- [x] AUTH_ENABLED env var 開關（dev 模式可匿名存取）
+- [x] 前端 Auth 系統
+  - AuthContext + useAuth() hook
+  - LoginPage + RegisterPage
+  - ProtectedRoute 路由守衛
+  - API client 自動注入 Bearer token + 401 refresh
+  - Sidebar 使用者資訊 + 登出
+- [x] 前端頁面改用 useAuth()（移除 localStorage smartfill_user_id）
+- [x] 新增 `tests/test_auth.py`（29 tests — 密碼 hash + JWT + schemas + router + dependencies + model）
+- [x] 全部 403 tests 通過
 
-### 6.2 多使用者隔離 `P1`
-- [ ] 每人獨立 ChromaDB collection
-- [ ] 共享知識庫（組織級）
-- [ ] 資料隔離驗證
+### 6.2 多使用者隔離 `P1` ✅
+- [x] Metadata-based ChromaDB 隔離（user_id + shared 欄位，非 per-user collection）
+  - `document_service.py` — `_build_metadata()` + `search_documents()` where 過濾
+  - `indexing_service.py` — 自動索引檔案標記 `shared="true"`
+- [x] user_id 穿透全鏈路
+  - `sse_pipeline.py` → `rag_pipeline.py` → `form_filler.py`
+  - `chat_service.py` / `email_generator.py` / `report_generator.py`
+  - Schemas: ChatRequest / EmailDraftRequest / ReportRequest 加 user_id
+- [x] Router auth + user_id 解析（JWT token 優先 > request body fallback）
+  - `chat.py` / `email.py` / `report.py` / `documents.py` / `indexing.py`
+- [x] 前端 SSE auth + user_id 注入
+  - `client.ts` — sseHeaders() + getCurrentUserId()
+  - `chat.ts` / `email.ts` / `report.ts` / `documents.ts`
+- [x] Migration 腳本（`scripts/migrate_chroma_metadata.py` — idempotent）
+- [x] 新增 `tests/test_multi_user_isolation.py`（27 tests）
+- [x] 全部 430 tests 通過
 
 ### 6.3 Docker 部署 `P1`
 - [ ] Dockerfile (backend)
@@ -274,6 +304,36 @@
 - [ ] GitHub Actions: lint + test on PR
 - [ ] Auto build + deploy pipeline
 - [ ] 環境變數管理
+
+---
+
+## Bug Fix Session — 2026-03-12
+
+### BF-1：傳統表格格式表單無法辨識欄位 ✅
+- [x] 症狀：上傳 `委員資料卡` DOCX → "No fillable fields detected in the document"
+- [x] 根因：`parse_docx` 只掃描 `{{variable}}` 模板標記，傳統「標籤儲存格｜空白儲存格」格式未被偵測
+- [x] 修正：`app/services/form_parser.py` 新增 Strategy 2（`table_blank` 偵測）
+  - 新增 `_clean_label()` helper（去除尾綴符號 `：:·\s`，Python `\w` 保留 CJK 字元）
+  - 合併儲存格去重（`id(cell._tc)` 追蹤，避免重複欄位）
+  - 相鄰空白儲存格視為可填寫欄位，建立 `FormField(field_type="table_blank")`
+- [x] 修正：`app/services/document_generator.py` 新增 `fill_docx_table_blanks()` 填寫函式
+  - `generate_filled_document()` dispatch 邏輯：有 `{{variable}}` → docxtpl/regex；無則 → table_blank
+
+### BF-2：提交覆寫時「Template file not found」 ✅
+- [x] 症狀：填寫完成後人工補充欄位 → 按「確認提交」→ `Template file not found: data\uploads\...`
+- [x] 根因：Router `finally` 區塊在 `fill_form` 完成後刪除上傳暫存檔，但 `submit_form_with_overrides` 之後再次嘗試讀取
+- [x] 修正：`app/models/form_job.py` — 新增 `template_path: Mapped[str | None]` 欄位
+- [x] 修正：`app/services/form_filler.py` — 填寫時 `shutil.copy2()` 複製模板至 `output_dir`（`tpl_{uuid}.ext`），路徑存入 job
+- [x] 修正：`app/services/form_filler.py` — `submit_form_with_overrides` 改用 `job["template_path"]`，舊路徑作 fallback
+- [x] 修正：`main.py` — lifespan 啟動時執行 `ALTER TABLE form_jobs ADD COLUMN template_path TEXT`（idempotent，try/except）
+- [x] 修正：`app/services/job_service.py` — `create_job` 儲存 `template_path`
+
+### BF-3：填寫結果字體不一致（細明體取代標楷體）✅
+- [x] 症狀：原始模板為標楷體，填入值顯示為細明體（系統預設字體）
+- [x] 根因：`fill_docx_table_blanks` 對空白儲存格新增 run 時未設定字體；python-docx `run.font.name` 只設 ASCII，不影響 CJK（`w:rFonts w:eastAsia`）
+- [x] 修正：`app/services/document_generator.py` 新增 `_get_cell_cjk_font()` — 從 OOXML `w:rFonts` 讀取 eastAsia/ascii/hAnsi 字體名稱
+- [x] 修正：`app/services/document_generator.py` 新增 `_apply_cjk_font()` — 直接操作 OOXML 設定 ascii + eastAsia + hAnsi
+- [x] 行為：新建 run 時自動從相鄰標籤儲存格繼承 CJK 字體（如 標楷體）
 
 ---
 

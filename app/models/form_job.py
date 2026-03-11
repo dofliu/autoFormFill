@@ -14,6 +14,7 @@ class FormJob(Base):
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     filename: Mapped[str] = mapped_column(String, nullable=False)
     template_filename: Mapped[str] = mapped_column(String, nullable=False)
+    template_path: Mapped[str | None] = mapped_column(String, nullable=True)
     output_path: Mapped[str] = mapped_column(String, nullable=False)
     fields_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     fill_data_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
@@ -28,6 +29,7 @@ class FormJob(Base):
             "user_id": self.user_id,
             "filename": self.filename,
             "template_filename": self.template_filename,
+            "template_path": self.template_path,
             "output_path": self.output_path,
             "fields": json.loads(self.fields_json),
             "fill_data": json.loads(self.fill_data_json),

@@ -9,3 +9,4 @@ class EmailDraftRequest(BaseModel):
     tone: str = "professional"  # "professional" | "friendly" | "formal"
     collections: list[str] | None = None
     n_results: int = 5
+    user_id: int | None = None  # fallback when AUTH_ENABLED=False

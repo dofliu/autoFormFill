@@ -2,6 +2,7 @@
  * Chat API client — streams SSE responses from the chat endpoint.
  */
 import type { ChatRequest, SSEEvent } from "../types/chat";
+import { getCurrentUserId, sseHeaders } from "./client";
 
 const BASE_URL = "/api/v1";
 
@@ -15,19 +16,26 @@ export async function* streamChat(
   request: ChatRequest,
   signal?: AbortSignal,
 ): AsyncGenerator<SSEEvent, void, unknown> {
+  // Inject user_id from auth context if not explicitly provided
+  const body: ChatRequest = { ...request };
+  if (body.user_id == null) {
+    const uid = getCurrentUserId();
+    if (uid !== null) body.user_id = uid;
+  }
+
   const response = await fetch(`${BASE_URL}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
+    headers: sseHeaders(),
+    body: JSON.stringify(body),
     signal,
   });
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({
+    const respBody = await response.json().catch(() => ({
       detail: response.statusText,
     }));
     throw new Error(
-      (body as { detail?: string }).detail || response.statusText,
+      (respBody as { detail?: string }).detail || response.statusText,
     );
   }
 

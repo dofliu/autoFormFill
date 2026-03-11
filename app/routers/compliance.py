@@ -4,7 +4,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_current_user, verify_ownership
 from app.database import get_db
+from app.models.user_profile import UserProfile
 from app.schemas.compliance import (
     ComplianceCheckResult,
     ComplianceRuleCreate,
@@ -36,8 +38,10 @@ async def create_rule(
     user_id: int,
     data: ComplianceRuleCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Create a new compliance rule."""
+    verify_ownership(current_user, user_id)
     if data.rule_type not in compliance_service.VALID_RULE_TYPES:
         raise HTTPException(
             status_code=400,
@@ -55,8 +59,10 @@ async def list_rules(
     user_id: int,
     active_only: bool = False,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """List all compliance rules for a user."""
+    verify_ownership(current_user, user_id)
     rules = await compliance_service.list_rules(db, user_id, active_only=active_only)
     return [_rule_response(r) for r in rules]
 
@@ -66,8 +72,10 @@ async def get_rule(
     user_id: int,
     rule_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Get a single compliance rule."""
+    verify_ownership(current_user, user_id)
     rule = await compliance_service.get_rule(db, rule_id)
     if not rule or rule.user_id != user_id:
         raise HTTPException(
@@ -83,8 +91,10 @@ async def update_rule(
     rule_id: int,
     data: ComplianceRuleUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Update a compliance rule."""
+    verify_ownership(current_user, user_id)
     existing = await compliance_service.get_rule(db, rule_id)
     if not existing or existing.user_id != user_id:
         raise HTTPException(
@@ -105,8 +115,10 @@ async def delete_rule(
     user_id: int,
     rule_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Delete a compliance rule."""
+    verify_ownership(current_user, user_id)
     existing = await compliance_service.get_rule(db, rule_id)
     if not existing or existing.user_id != user_id:
         raise HTTPException(
@@ -123,8 +135,10 @@ async def check_job_compliance(
     user_id: int,
     job_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Check compliance of a specific job's fill results against user's rules."""
+    verify_ownership(current_user, user_id)
     job = await job_store.get_job(job_id, db)
     if not job:
         raise HTTPException(

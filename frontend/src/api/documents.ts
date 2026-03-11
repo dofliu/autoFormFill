@@ -1,4 +1,4 @@
-import { get, postForm } from "./client";
+import { get, getCurrentUserId, postForm } from "./client";
 import type { DocumentMetadataInput, DocumentUploadResponse, DocumentSearchResponse } from "../types/document";
 
 export async function uploadDocument(
@@ -16,6 +16,11 @@ export async function uploadDocument(
   if (metadata.funding_agency) fd.append("funding_agency", metadata.funding_agency);
   if (metadata.execution_period) fd.append("execution_period", metadata.execution_period);
   if (metadata.tech_stack) fd.append("tech_stack", metadata.tech_stack);
+
+  // Inject user_id for multi-user isolation
+  const uid = getCurrentUserId();
+  if (uid !== null) fd.append("user_id", String(uid));
+
   return postForm<DocumentUploadResponse>("/documents/upload", fd);
 }
 

@@ -122,8 +122,16 @@ def extract_text(file_path: str, file_type: str) -> str:
         raise ValueError(f"Unsupported file type: {file_type}")
 
 
-def _build_metadata(meta: DocumentMetadataInput) -> dict:
-    """Build ChromaDB-compatible metadata dict (string values only)."""
+def _build_metadata(
+    meta: DocumentMetadataInput,
+    user_id: int | None = None,
+) -> dict:
+    """Build ChromaDB-compatible metadata dict (string values only).
+
+    Args:
+        meta: Document metadata from the upload request.
+        user_id: Owner of the document. ``None`` → dev mode (no isolation).
+    """
     result = {"title": meta.title, "doc_type": meta.doc_type}
     if meta.authors:
         result["authors"] = meta.authors
@@ -139,11 +147,19 @@ def _build_metadata(meta: DocumentMetadataInput) -> dict:
         result["execution_period"] = meta.execution_period
     if meta.tech_stack:
         result["tech_stack"] = meta.tech_stack
+
+    # Multi-user isolation metadata
+    if user_id is not None:
+        result["user_id"] = str(user_id)
+        result["shared"] = "false"
     return result
 
 
 async def embed_and_store(
-    file_path: str, file_type: str, metadata: DocumentMetadataInput
+    file_path: str,
+    file_type: str,
+    metadata: DocumentMetadataInput,
+    user_id: int | None = None,
 ) -> DocumentUploadResponse:
     """Extract text, chunk, embed, and store in ChromaDB."""
     text = extract_text(file_path, file_type)
@@ -165,7 +181,7 @@ async def embed_and_store(
 
     # Store in ChromaDB
     ids = [f"{doc_id}_{i}" for i in range(len(chunks))]
-    meta_dict = _build_metadata(metadata)
+    meta_dict = _build_metadata(metadata, user_id=user_id)
     metadatas = [meta_dict for _ in chunks]
 
     await asyncio.to_thread(
@@ -185,18 +201,41 @@ async def embed_and_store(
 
 
 async def search_documents(
-    query: str, collection_name: str, n_results: int = 5
+    query: str,
+    collection_name: str,
+    n_results: int = 5,
+    user_id: int | None = None,
 ) -> list[dict]:
-    """Search ChromaDB for relevant document chunks."""
+    """Search ChromaDB for relevant document chunks.
+
+    Args:
+        query: Natural language search query.
+        collection_name: Which ChromaDB collection to search.
+        n_results: Maximum results to return.
+        user_id: When set, only return documents owned by this user
+                 **or** marked as shared. ``None`` → no filtering (dev mode).
+    """
     adapter = get_llm_adapter()
     query_embedding = await asyncio.to_thread(adapter.embed_text, query)
 
     collection = get_collection(collection_name)
+
+    # Build optional where filter for multi-user isolation
+    where_filter = None
+    if user_id is not None:
+        where_filter = {
+            "$or": [
+                {"user_id": str(user_id)},
+                {"shared": "true"},
+            ]
+        }
+
     results = await asyncio.to_thread(
         collection.query,
         query_embeddings=[query_embedding],
         n_results=n_results,
         include=["documents", "metadatas", "distances"],
+        where=where_filter,
     )
 
     items = []

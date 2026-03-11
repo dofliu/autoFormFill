@@ -6,10 +6,12 @@ Provides status, manual rescan, and file listing for the auto-indexing system.
 import os
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from app.auth.dependencies import get_current_user
 from app.config import settings
+from app.models.user_profile import UserProfile
 from app.services.file_watcher import file_watcher
 from app.services.indexing_service import (
     get_index_status,
@@ -52,7 +54,9 @@ def _is_within_watch_dirs(file_path: str) -> bool:
 # --- Endpoints ---
 
 @router.get("/status")
-async def indexing_status():
+async def indexing_status(
+    current_user: UserProfile | None = Depends(get_current_user),
+):
     """Get overall indexing statistics and watcher status."""
     index_stats = await get_index_status()
     watcher_status = file_watcher.get_status()
@@ -63,7 +67,9 @@ async def indexing_status():
 
 
 @router.post("/rescan")
-async def rescan_directories():
+async def rescan_directories(
+    current_user: UserProfile | None = Depends(get_current_user),
+):
     """Manually trigger a full rescan of all watched directories."""
     watch_dirs = settings.get_watch_dirs()
     if not watch_dirs:
@@ -84,6 +90,7 @@ async def rescan_directories():
 async def list_indexed_files(
     status: str | None = Query(None, description="Filter by status: indexed, indexing, error, deleted, stale, pending"),
     limit: int = Query(100, ge=1, le=1000),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """List indexed files, optionally filtered by status."""
     if status and status not in VALID_STATUSES:
@@ -96,7 +103,10 @@ async def list_indexed_files(
 
 
 @router.post("/index-file")
-async def index_single_file(body: FilePathRequest):
+async def index_single_file(
+    body: FilePathRequest,
+    current_user: UserProfile | None = Depends(get_current_user),
+):
     """Manually index a single file by its absolute path.
 
     The file must be located within one of the configured WATCH_DIRS.
@@ -120,7 +130,10 @@ async def index_single_file(body: FilePathRequest):
 
 
 @router.post("/remove-file")
-async def remove_single_file(body: FilePathRequest):
+async def remove_single_file(
+    body: FilePathRequest,
+    current_user: UserProfile | None = Depends(get_current_user),
+):
     """Remove a single file from the index.
 
     The file must be located within one of the configured WATCH_DIRS.

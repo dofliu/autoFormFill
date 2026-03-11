@@ -32,13 +32,17 @@ async def generate_field_content(
     max_length: int = 1000,
     language: str = "zh-TW",
     format_hint: str = "paragraph",
+    user_id: int | None = None,
 ) -> tuple[str, float]:
     """Retrieve relevant chunks and generate content for a form field.
+
+    Args:
+        user_id: Filter search results by owner — ``None`` = no filtering.
 
     Returns (generated_text, confidence_score).
     """
     # Step 1: Retrieve relevant document chunks
-    results = await search_documents(search_query, collection_name, n_results=5)
+    results = await search_documents(search_query, collection_name, n_results=5, user_id=user_id)
 
     if not results:
         return "[需人工補充]", 0.0

@@ -7,6 +7,7 @@ export interface EmailDraftRequest {
   tone?: "professional" | "friendly" | "formal";
   collections?: string[];
   n_results?: number;
+  user_id?: number;
 }
 
 // SSE events reuse the same types as chat (SSEEvent from types/chat.ts)

@@ -16,6 +16,7 @@ class ChatRequest(BaseModel):
     history: list[ChatMessage] = []
     collections: list[str] | None = None  # None = search all collections
     n_results: int = 5
+    user_id: int | None = None  # fallback when AUTH_ENABLED=False
 
 
 class SourceChunk(BaseModel):

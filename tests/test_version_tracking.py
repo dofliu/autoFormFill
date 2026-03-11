@@ -237,5 +237,5 @@ class TestVersionRouterIntegration:
             mock_get.side_effect = [old_ver, new_ver]
             from fastapi import HTTPException
             with pytest.raises(HTTPException) as exc_info:
-                await router_diff(user_id=1, old_version_id=1, new_version_id=2, db=mock_db)
+                await router_diff(user_id=1, old_version_id=1, new_version_id=2, db=mock_db, current_user=None)
             assert exc_info.value.status_code == 400

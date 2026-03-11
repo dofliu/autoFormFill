@@ -5,7 +5,9 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.dependencies import get_current_user, verify_ownership
 from app.database import get_db
+from app.models.user_profile import UserProfile
 from app.schemas.entity_relation import (
     EntityRelationCreate,
     EntityRelationResponse,
@@ -33,25 +35,35 @@ def _relation_response(relation) -> dict:
 
 @router.get("/types", response_model=list[str])
 async def get_relation_types(
-    user_id: int, db: AsyncSession = Depends(get_db)
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Return distinct relation types for a user."""
+    verify_ownership(current_user, user_id)
     return await entity_relation_service.get_relation_types(db, user_id)
 
 
 @router.get("/graph", response_model=GraphData)
 async def get_full_graph(
-    user_id: int, db: AsyncSession = Depends(get_db)
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Return full graph data (all entities + relations) for visualization."""
+    verify_ownership(current_user, user_id)
     return await entity_relation_service.get_full_graph(db, user_id)
 
 
 @router.get("/graph/{entity_id}", response_model=GraphData)
 async def get_neighbor_graph(
-    user_id: int, entity_id: int, db: AsyncSession = Depends(get_db)
+    user_id: int,
+    entity_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Return 1-hop subgraph around a specific entity."""
+    verify_ownership(current_user, user_id)
     return await entity_relation_service.get_neighbors(db, user_id, entity_id)
 
 
@@ -63,8 +75,11 @@ async def create_relation(
     user_id: int,
     data: EntityRelationCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Create a directed relation between two entities."""
+    verify_ownership(current_user, user_id)
+
     # Validate: no self-reference
     if data.from_entity_id == data.to_entity_id:
         raise HTTPException(
@@ -96,8 +111,10 @@ async def list_relations(
     relation_type: str | None = None,
     entity_id: int | None = None,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """List relations, optionally filtered by type or entity involvement."""
+    verify_ownership(current_user, user_id)
     relations = await entity_relation_service.list_relations(
         db, user_id, relation_type, entity_id
     )
@@ -106,9 +123,13 @@ async def list_relations(
 
 @router.get("/{relation_id}", response_model=EntityRelationResponse)
 async def get_relation(
-    user_id: int, relation_id: int, db: AsyncSession = Depends(get_db)
+    user_id: int,
+    relation_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Get a single relation by ID."""
+    verify_ownership(current_user, user_id)
     relation = await entity_relation_service.get_relation(db, relation_id)
     if not relation or relation.user_id != user_id:
         raise HTTPException(
@@ -124,8 +145,10 @@ async def update_relation(
     relation_id: int,
     data: EntityRelationUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Update a relation (type / description only — endpoints not changeable)."""
+    verify_ownership(current_user, user_id)
     relation = await entity_relation_service.get_relation(db, relation_id)
     if not relation or relation.user_id != user_id:
         raise HTTPException(
@@ -138,9 +161,13 @@ async def update_relation(
 
 @router.delete("/{relation_id}", status_code=204)
 async def delete_relation(
-    user_id: int, relation_id: int, db: AsyncSession = Depends(get_db)
+    user_id: int,
+    relation_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile | None = Depends(get_current_user),
 ):
     """Delete a relation."""
+    verify_ownership(current_user, user_id)
     relation = await entity_relation_service.get_relation(db, relation_id)
     if not relation or relation.user_id != user_id:
         raise HTTPException(

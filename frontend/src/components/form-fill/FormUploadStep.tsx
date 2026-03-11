@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as usersApi from "../../api/users";
 import * as formsApi from "../../api/forms";
+import { useAuth } from "../../contexts/AuthContext";
 import type { UserProfile } from "../../types/user";
 import type { FormFillResponse } from "../../types/form";
 
@@ -9,11 +10,9 @@ interface Props {
 }
 
 export default function FormUploadStep({ onFilled }: Props) {
+  const { user: authUser } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(() => {
-    const saved = localStorage.getItem("smartfill_user_id");
-    return saved ? parseInt(saved) : null;
-  });
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(authUser?.id ?? null);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -24,14 +23,10 @@ export default function FormUploadStep({ onFilled }: Props) {
     usersApi.listUsers().then((list) => {
       setUsers(list);
       if (list.length > 0 && !selectedUserId) {
-        setSelectedUserId(list[0].id);
+        setSelectedUserId(authUser?.id ?? list[0].id);
       }
     });
   }, []);
-
-  useEffect(() => {
-    if (selectedUserId) localStorage.setItem("smartfill_user_id", String(selectedUserId));
-  }, [selectedUserId]);
 
   const handleSubmit = async () => {
     if (!file || !selectedUserId) return;
