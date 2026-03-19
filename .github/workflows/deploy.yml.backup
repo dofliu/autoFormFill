@@ -1,0 +1,319 @@
+name: Deploy - Build and Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'  # Deploy on version tags
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual triggering
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      version:
+        description: 'Specific version/tag to deploy'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write  # For OIDC token
+    
+    strategy:
+      matrix:
+        include:
+          - dockerfile: Dockerfile
+            image: backend
+          - dockerfile: Dockerfile.frontend
+            image: frontend
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          image=moby/buildkit:master
+          network=host
+    
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=tag
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha,format=short
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./${{ matrix.dockerfile }}
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.image }}:${{ steps.meta.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.image }}:latest
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+        provenance: false
+        sbom: true
+    
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.image }}:${{ steps.meta.outputs.version }}
+        format: spdx-json
+        output-file: sbom-${{ matrix.image }}.json
+    
+    - name: Upload SBOM
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-${{ matrix.image }}
+        path: sbom-${{ matrix.image }}.json
+        retention-days: 90
+  
+  generate-release-artifacts:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Download SBOMs
+      uses: actions/download-artifact@v4
+      with:
+        path: sboms
+        pattern: sbom-*
+        merge-multiple: true
+    
+    - name: Generate deployment artifacts
+      run: |
+        # Create deployment directory
+        mkdir -p deployment
+        
+        # Get version information
+        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+        else
+          VERSION=$(git describe --tags --always --dirty)
+        fi
+        
+        # Copy docker-compose.yml
+        cp docker-compose.yml deployment/
+        
+        # Copy environment template
+        cp .env.example deployment/.env.template
+        
+        # Create deployment script
+        cat > deployment/deploy.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        echo "🚀 Starting AutoFormFill deployment..."
+        echo "Version: $VERSION"
+        echo "Timestamp: $(date)"
+        
+        # Check if .env file exists
+        if [ ! -f .env ]; then
+          echo "❌ .env file not found. Please copy .env.template to .env and fill in the values."
+          exit 1
+        fi
+        
+        # Validate environment variables
+        echo "🔍 Validating environment variables..."
+        if ! grep -q "GEMINI_API_KEY=" .env || grep -q "GEMINI_API_KEY=your_api_key_here" .env; then
+          echo "❌ Please set a valid GEMINI_API_KEY in .env file"
+          exit 1
+        fi
+        
+        # Login to GitHub Container Registry if using private images
+        if [[ "$(grep 'image: ghcr.io' docker-compose.yml)" ]]; then
+          echo "🔐 Logging in to GitHub Container Registry..."
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        fi
+        
+        # Pull latest images
+        echo "📥 Pulling latest Docker images..."
+        docker-compose pull
+        
+        # Stop and remove old containers
+        echo "🛑 Stopping existing containers..."
+        docker-compose down --remove-orphans
+        
+        # Clean up old images
+        echo "🧹 Cleaning up old Docker images..."
+        docker image prune -f
+        
+        # Start new containers
+        echo "🚀 Starting new containers..."
+        docker-compose up -d
+        
+        # Wait for services to be ready
+        echo "⏳ Waiting for services to be ready..."
+        sleep 10
+        
+        # Run health checks
+        echo "🏥 Running health checks..."
+        
+        # Check backend health
+        if curl -f http://localhost:8000/health; then
+          echo "✅ Backend is healthy"
+        else
+          echo "❌ Backend health check failed"
+          docker-compose logs backend
+          exit 1
+        fi
+        
+        # Check frontend (through nginx)
+        if curl -f http://localhost:80 > /dev/null 2>&1; then
+          echo "✅ Frontend is accessible"
+        else
+          echo "⚠️ Frontend check failed (might be nginx configuration)"
+        fi
+        
+        echo "✅ Deployment completed successfully!"
+        echo "========================================"
+        echo "🌐 Frontend: http://localhost:80"
+        echo "🔧 Backend API: http://localhost:8000"
+        echo "📊 Health check: http://localhost:8000/health"
+        echo "📝 API Documentation: http://localhost:8000/docs"
+        echo "📋 Service status: docker-compose ps"
+        echo "📜 View logs: docker-compose logs -f"
+        echo "========================================"
+        EOF
+        
+        chmod +x deployment/deploy.sh
+        
+        # Create update script
+        cat > deployment/update.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        echo "🔄 Updating AutoFormFill..."
+        
+        # Pull latest code
+        git pull origin main
+        
+        # Run deployment script
+        ./deploy.sh
+        EOF
+        
+        chmod +x deployment/update.sh
+        
+        # Create rollback script
+        cat > deployment/rollback.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        echo "↩️ Rolling back to previous version..."
+        
+        # Check if we have a backup tag
+        if [ -z "$1" ]; then
+          echo "Usage: ./rollback.sh <previous-tag>"
+          echo "Available tags:"
+          git tag --sort=-version:refname | head -10
+          exit 1
+        fi
+        
+        PREVIOUS_TAG=$1
+        
+        # Check if tag exists
+        if ! git rev-parse "$PREVIOUS_TAG" >/dev/null 2>&1; then
+          echo "❌ Tag '$PREVIOUS_TAG' does not exist"
+          exit 1
+        fi
+        
+        # Checkout previous version
+        git checkout "$PREVIOUS_TAG"
+        
+        # Run deployment
+        ./deploy.sh
+        
+        echo "✅ Rollback to $PREVIOUS_TAG completed!"
+        EOF
+        
+        chmod +x deployment/rollback.sh
+        
+        # Create monitoring script
+        cat > deployment/monitor.sh << 'EOF'
+        #!/bin/bash
+        
+        echo "📊 AutoFormFill Monitoring Dashboard"
+        echo "===================================="
+        
+        # Service status
+        echo "Service Status:"
+        docker-compose ps
+        
+        echo ""
+        
+        # Resource usage
+        echo "Resource Usage:"
+        docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}" || true
+        
+        echo ""
+        
+        # Logs (last 10 lines)
+        echo "Recent Logs:"
+        docker-compose logs --tail=10 --timestamps
+        
+        echo ""
+        
+        # Disk usage
+        echo "Disk Usage:"
+        du -sh data/* 2>/dev/null || echo "No data directory found"
+        
+        echo ""
+        
+        # Health check
+        echo "Health Check:"
+        if curl -s -f http://localhost:8000/health > /dev/null; then
+          echo "✅ All systems operational"
+        else
+          echo "❌ Health check failed"
+        fi
+        EOF
+        
+        chmod +x deployment/monitor.sh
+        
+        # Create backup script
+        cat > deployment/backup.sh << 'EOF'
+        #

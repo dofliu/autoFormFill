@@ -1,0 +1,396 @@
+name: Phase 6.4 - CI Pipeline
+
+on:
+  pull_request:
+    branches: [ main, master ]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [ main, master ]
+  schedule:
+    # Run weekly on Monday at 00:00 UTC for maintenance checks
+    - cron: '0 0 * * 1'
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+  DATABASE_URL: sqlite+aiosqlite:///./test.db
+  CHROMA_PERSIST_DIR: ./test_chroma
+  UPLOAD_DIR: ./test_uploads
+  OUTPUT_DIR: ./test_outputs
+  AUTH_ENABLED: False
+  JWT_SECRET_KEY: test-secret-key-for-ci
+  PYTHONPATH: ${{ github.workspace }}
+  # 優化設置
+  PYTHONUNBUFFERED: 1
+  PYTHONDONTWRITEBYTECODE: 1
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+        os: [ubuntu-latest]
+      fail-fast: false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-asyncio pytest-xdist black flake8 mypy isort ruff
+        # 安裝測試專用依賴
+        pip install pytest-timeout pytest-mock
+    
+    - name: Run Python linters
+      run: |
+        echo "=== Running Python Linters ==="
+        
+        # Check import sorting with isort
+        echo "Running isort..."
+        isort --check-only --diff . || echo "isort found issues"
+        
+        # Check code formatting with black
+        echo "Running black..."
+        black --check --diff . || echo "black found issues"
+        
+        # Check for code style issues with flake8
+        echo "Running flake8..."
+        flake8 . --count --show-source --statistics || echo "flake8 found issues"
+        
+        # Run ruff for additional linting
+        echo "Running ruff..."
+        ruff check . || echo "ruff found issues"
+        
+        # Run type checking with mypy
+        echo "Running mypy..."
+        mypy --ignore-missing-imports --show-error-codes . || echo "mypy found issues"
+    
+    - name: Create test directories
+      run: |
+        mkdir -p test_uploads test_outputs test_chroma data
+    
+    - name: Run Python tests with coverage
+      run: |
+        echo "=== Running Python Tests ==="
+        python -m pytest tests/ \
+          -v \
+          --cov=app \
+          --cov-report=xml \
+          --cov-report=html \
+          --cov-report=term \
+          --junitxml=junit.xml \
+          --maxfail=5 \
+          --disable-warnings \
+          --timeout=30 \
+          -n auto
+    
+    - name: Upload test coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.python-version }}-${{ matrix.os }}
+        path: |
+          htmlcov/
+          coverage.xml
+          junit.xml
+        retention-days: 7
+    
+    - name: Clean up test directories
+      if: always()
+      run: |
+        rm -rf test_uploads test_outputs test_chroma data
+    
+    - name: Set up Node.js for frontend
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: |
+        npm ci
+        npm audit --audit-level=moderate || true
+    
+    - name: Run TypeScript type checking
+      working-directory: ./frontend
+      run: npx tsc --noEmit --project tsconfig.json
+    
+    - name: Run ESLint
+      working-directory: ./frontend
+      run: npm run lint
+    
+    - name: Build frontend
+      working-directory: ./frontend
+      run: npm run build
+    
+    - name: Run frontend tests (if available)
+      working-directory: ./frontend
+      run: |
+        if [ -f "package.json" ] && grep -q '"test"' package.json; then
+          npm test -- --passWithNoTests || echo "No frontend tests configured"
+        else
+          echo "No test script found in package.json"
+          # 添加基本的構建測試
+          echo "Testing production build..."
+          npm run build
+          # 檢查構建輸出
+          if [ -d "dist" ]; then
+            echo "Build successful, dist directory created"
+            ls -la dist/
+          else
+            echo "Build failed: dist directory not found"
+            exit 1
+          fi
+        fi
+    
+    - name: Upload frontend build artifact
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-build
+        path: frontend/dist/
+        retention-days: 7
+  
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    timeout-minutes: 20
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run Bandit security scan
+      uses: py-actions/bandit@v4
+      with:
+        path: ./app
+        args: "-r -f json -o bandit-report.json"
+    
+    - name: Run Safety check for Python dependencies
+      run: |
+        pip install safety
+        safety check --json > safety-report.json || true
+        # 檢查已知漏洞
+        safety check --full-report || echo "Safety check completed"
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload security reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+          trivy-results.sarif
+        retention-days: 30
+    
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+  
+  docker-build-test:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    timeout-minutes: 25
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build backend Docker image
+      run: |
+        docker build \
+          --tag autoformfill-backend:test \
+          --file Dockerfile \
+          --progress plain \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
+          .
+    
+    - name: Build frontend Docker image
+      run: |
+        docker build \
+          --tag autoformfill-frontend:test \
+          --file Dockerfile.frontend \
+          --progress plain \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
+          .
+    
+    - name: Test Docker Compose
+      run: |
+        echo "=== Testing Docker Compose Configuration ==="
+        
+        # Test docker-compose configuration
+        docker-compose config
+        
+        echo "=== Starting Services ==="
+        # Start services in test mode
+        docker-compose up -d
+        
+        echo "=== Waiting for services to be ready ==="
+        # Wait for services to be ready with timeout
+        timeout 60 bash -c 'until docker-compose ps | grep -q "Up"; do sleep 2; done' || true
+        
+        echo "=== Checking Service Status ==="
+        # Check if backend is running
+        docker-compose ps
+        
+        echo "=== Running Health Check ==="
+        # Run health check with retry
+        for i in {1..5}; do
+          if docker-compose exec -T backend curl -f http://localhost:8000/health; then
+            echo "Health check passed!"
+            break
+          else
+            echo "Health check attempt $i failed, retrying in 5 seconds..."
+            sleep 5
+          fi
+        done
+        
+        echo "=== Stopping Services ==="
+        # Stop services
+        docker-compose down -v
+    
+    - name: Run Docker image vulnerability scan
+      run: |
+        # Install Trivy if not available
+        if ! command -v trivy &> /dev/null; then
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        fi
+        
+        # Scan backend image
+        trivy image --exit-code 0 --severity HIGH,CRITICAL autoformfill-backend:test
+        
+        # Scan frontend image
+        trivy image --exit-code 0 --severity HIGH,CRITICAL autoformfill-frontend:test
+    
+    - name: Clean up Docker images
+      if: always()
+      run: |
+        docker rmi autoformfill-backend:test autoformfill-frontend:test || true
+        docker system prune -f
+  
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    timeout-minutes: 15
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install locust
+    
+    - name: Run performance tests
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        # Start backend in background
+        python main.py &
+        BACKEND_PID=$!
+        
+        # Wait for backend to start
+        sleep 10
+        
+        # Run Locust performance test
+        locust -f scripts/performance_test.py \
+          --headless \
+          --users 10 \
+          --spawn-rate 1 \
+          --run-time 30s \
+          --host http://localhost:8000 \
+          --csv=performance_results
+        
+        # Kill backend
+        kill $BACKEND_PID 2>/dev/null || true
+    
+    - name: Upload performance results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-results
+        path: performance_results*
+        retention-days: 30
+  
+  notify:
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, security-scan, docker-build-test]
+    if: always()
+    
+    steps:
+    - name: Check workflow status
+      run: |
+        echo "Workflow Status:"
+        echo "lint-and-test: ${{ needs.lint-and-test.result }}"
+        echo "security-scan: ${{ needs.security-scan.result }}"
+        echo "docker-build-test: ${{ needs.docker-build-test.result }}"
+        
+        # Determine overall status
+        if [[ "${{ needs.lint-and-test.result }}" == "success" && \
+              "${{ needs.security-scan.result }}" == "success" && \
+              "${{ needs.docker-build-test.result }}" == "success" ]]; then
+          echo "STATUS=success" >> $GITHUB_ENV
+          echo "EMOJI=✅" >> $GITHUB_ENV
+        else
+          echo "STATUS=failure" >> $GITHUB_ENV
+          echo "EMOJI=❌" >> $GITHUB_ENV
+        fi
+    
+    - name: Send notification on failure
+      if: failure()
+      run: |
+        echo "❌ CI Pipeline failed!"
+        echo "Workflow: ${{ github.workflow }}"
+        echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        
+    - name: Send notification on success
+      if: success()
+      run: |
+        echo "✅ CI Pipeline passed!"
+        echo "Workflow: ${{ github.workflow }}"
+        echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

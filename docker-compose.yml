@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LLM_PROVIDER=gemini
+      - GEMINI_MODEL=gemini-2.0-flash
+      - GEMINI_EMBEDDING_MODEL=text-embedding-004
+      - DATABASE_URL=sqlite+aiosqlite:///./data/smartfill.db
+      - CHROMA_PERSIST_DIR=/app/data/chroma
+      - UPLOAD_DIR=/app/data/uploads
+      - OUTPUT_DIR=/app/data/outputs
+      - AUTH_ENABLED=False
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-CHANGE-ME-IN-PRODUCTION}
+    volumes:
+      - ./data:/app/data
+      - chroma_data:/app/data/chroma
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  chroma_data:
+
+networks:
+  default:
+    name: smartfill-network

@@ -1,91 +1,91 @@
-# SmartFill-Scholar 智能學術表單填寫系統
+﻿# SmartFill-Scholar ?箄摮貉?銵典憛怠神蝟餌絞
 
-自動填寫學術表單的全端應用程式。系統透過 SQL 資料庫查詢使用者靜態資料，並結合 RAG（Retrieval-Augmented Generation）從知識庫中擷取複雜欄位內容，最終由 LLM 生成填寫結果。
+?芸?憛怠神摮貉?銵典?蝡舀??函?撘頂蝯梢? SQL 鞈?摨急閰Ｖ蝙?刻?????銝衣???RAG嚗etrieval-Augmented Generation嚗??亥?摨思葉?瑕?銴?甈??批捆嚗?蝯 LLM ??憛怠神蝯???
 
-## 功能特色
+## ??寡
 
-- **表單解析**：支援 `.docx` 模板變數（`{{variable}}`）與 PDF 表單欄位自動偵測
-- **智能欄位路由**：LLM 自動判斷每個欄位應從 SQL 資料庫或向量知識庫擷取
-- **混合檢索填寫**：靜態資料（姓名、職稱等）走 SQL，複雜內容（研究摘要等）走 RAG
-- **幻覺防護**：RAG 生成結果自動比對原始文件，偵測並修正幻覺內容
-- **色彩標記審查**：填寫結果以色碼分類（🟢SQL / 🟡RAG / 🔴需人工 / 🔵手動覆寫）
-- **表單歷史紀錄**：記錄每次填寫結果，支援回顧與重新編輯
-- **知識庫管理**：上傳學術論文與研究計畫，建立語意搜尋索引
+- **銵典閫??**嚗??`.docx` 璅⊥霈嚗{{variable}}`嚗? PDF 銵典甈??芸??菜葫
+- **?箄甈?頝舐**嚗LM ?芸??斗瘥?雿?敺?SQL 鞈?摨急????亥?摨急??
+- **瘛瑕?瑼Ｙ揣憛怠神**嚗?????憪??蝔梁?嚗粥 SQL嚗??摰對??弦??蝑?韏?RAG
+- **撟餉死?脰風**嚗AG ??蝯??芸?瘥????辣嚗皜砌蒂靽格迤撟餉死?批捆
+- **?脣蔗璅?撖拇**嚗‵撖怎??誑?脩Ⅳ??嚗?㏎QL / ?RAG / ??鈭箏極 / ???閬神嚗?
+- **銵典甇瑕蝝??*嚗???甈∪‵撖怎????舀?“???啁楊頛?
+- **?亥?摨怎恣??*嚗??喳飛銵????弦閮嚗遣蝡???撠揣撘?
 
-## 技術架構
+## ?銵瑽?
 
 ```
-┌─────────────────────────────────────────────────┐
-│                   Frontend                       │
-│   React 19 + TypeScript + Tailwind CSS v4       │
-│   Vite 7 dev server (proxy → :8000)             │
-├─────────────────────────────────────────────────┤
-│                   Backend                        │
-│   FastAPI + async SQLAlchemy + aiosqlite        │
-├──────────────────┬──────────────────────────────┤
-│   SQLite (SQL)   │   ChromaDB (Vector)          │
-│   使用者資料      │   學術論文 / 研究計畫         │
-├──────────────────┴──────────────────────────────┤
-│              Google Gemini API                   │
-│   text generation / JSON output / embeddings    │
-└─────────────────────────────────────────────────┘
+????????????????????????????????????????????????????
+??                  Frontend                       ??
+??  React 19 + TypeScript + Tailwind CSS v4       ??
+??  Vite 7 dev server (proxy ??:8000)             ??
+????????????????????????????????????????????????????
+??                  Backend                        ??
+??  FastAPI + async SQLAlchemy + aiosqlite        ??
+????????????????????砂????????????????????????????????
+??  SQLite (SQL)   ??  ChromaDB (Vector)          ??
+??  雿輻????     ??  摮貉?隢? / ?弦閮         ??
+????????????????????氯????????????????????????????????
+??             Google Gemini API                   ??
+??  text generation / JSON output / embeddings    ??
+????????????????????????????????????????????????????
 ```
 
-### 後端 (Python)
+### 敺垢 (Python)
 
-| 技術 | 用途 |
+| ?銵?| ?券?|
 |------|------|
-| FastAPI | 非同步 Web 框架 |
-| SQLAlchemy 2.0 + aiosqlite | 非同步 ORM / SQLite |
-| ChromaDB | 向量資料庫（PersistentClient） |
-| Google Gemini API | 文字生成、JSON 結構化輸出、文本嵌入 |
-| docxtpl / python-docx | Word 模板填寫 |
-| PyMuPDF / pdfplumber | PDF 解析 |
+| FastAPI | ??甇?Web 獢 |
+| SQLAlchemy 2.0 + aiosqlite | ??甇?ORM / SQLite |
+| ChromaDB | ??鞈?摨恬?PersistentClient嚗?|
+| Google Gemini API | ?????SON 蝯??撓?箝??砍???|
+| docxtpl / python-docx | Word 璅⊥憛怠神 |
+| PyMuPDF / pdfplumber | PDF 閫?? |
 
-### 前端 (TypeScript)
+### ?垢 (TypeScript)
 
-| 技術 | 用途 |
+| ?銵?| ?券?|
 |------|------|
-| React 19 | UI 框架 |
-| TypeScript 5.9 | 型別安全 |
-| Tailwind CSS v4 | 樣式系統 |
-| Vite 7 | 建置工具與開發伺服器 |
-| React Router v7 | 路由管理 |
+| React 19 | UI 獢 |
+| TypeScript 5.9 | ?摰 |
+| Tailwind CSS v4 | 璅??蝟餌絞 |
+| Vite 7 | 撱箇蔭撌亙???潔撩? |
+| React Router v7 | 頝舐蝞∠? |
 
-## 快速開始
+## 敹恍?憪?
 
-### 前置需求
+### ?蔭?瘙?
 
 - Python 3.11+
 - Node.js 20+
-- Google Gemini API Key（[取得方式](https://aistudio.google.com/apikey)）
+- Google Gemini API Key嚗???孵?](https://aistudio.google.com/apikey)嚗?
 
-### 1. 環境設定
+### 1. ?啣?閮剖?
 
 ```bash
-# 複製專案
+# 銴ˊ撠?
 git clone <repo-url>
 cd autoFill
 
-# 建立 Python 虛擬環境
+# 撱箇? Python ??啣?
 python -m venv .venv
 source .venv/bin/activate   # Linux/macOS
 # .venv\Scripts\activate    # Windows
 
-# 安裝後端依賴
+# 摰?敺垢靘陷
 pip install -r requirements.txt
 
-# 安裝前端依賴
+# 摰??垢靘陷
 cd frontend && npm install && cd ..
 ```
 
-### 2. 設定環境變數
+### 2. 閮剖??啣?霈
 
 ```bash
 cp .env.example .env
 ```
 
-編輯 `.env`，填入你的 Gemini API Key：
+蝺刻摩 `.env`嚗‵?乩???Gemini API Key嚗?
 
 ```env
 GEMINI_API_KEY=your-actual-gemini-api-key
@@ -98,222 +98,223 @@ UPLOAD_DIR=./data/uploads
 OUTPUT_DIR=./data/outputs
 ```
 
-### 3. 啟動服務
+### 3. ????
 
 ```bash
-# Terminal 1 — 後端 (port 8000)
+# Terminal 1 ??敺垢 (port 8000)
 python -m uvicorn main:app --reload
 
-# Terminal 2 — 前端 (port 5173)
+# Terminal 2 ???垢 (port 5173)
 cd frontend && npm run dev
 ```
 
-### 4. 開始使用
+### 4. ??雿輻
 
-- 前端 UI：http://localhost:5173
-- API 文件（Swagger）：http://localhost:8000/docs
-- 健康檢查：http://localhost:8000/health
+- ?垢 UI嚗ttp://localhost:5173
+- API ?辣嚗wagger嚗?http://localhost:8000/docs
+- ?亙熒瑼Ｘ嚗ttp://localhost:8000/health
 
-## 專案結構
+## 撠?蝯?
 
 ```
 autoFill/
-├── main.py                          # FastAPI 應用進入點
-├── requirements.txt                 # Python 依賴
-├── .env.example                     # 環境變數範本
-├── .gitignore
-│
-├── app/
-│   ├── config.py                    # pydantic-settings 設定
-│   ├── database.py                  # 非同步 SQLAlchemy 引擎
-│   ├── vector_store.py              # ChromaDB 客戶端
-│   ├── job_store.py                 # 表單填寫任務持久化（DB-backed + in-memory fallback）
-│   │
-│   ├── models/                      # ORM 模型
-│   │   ├── user_profile.py
-│   │   ├── education_experience.py
-│   │   └── form_job.py              # FormJob ORM（表單填寫任務記錄）
-│   │
-│   ├── schemas/                     # Pydantic 請求/回應模型
-│   │   ├── user_profile.py
-│   │   ├── education_experience.py
-│   │   ├── document.py
-│   │   └── form.py
-│   │
-│   ├── routers/                     # API 路由
-│   │   ├── user_profiles.py         # /api/v1/users
-│   │   ├── education_experience.py  # /api/v1/users/{id}/education
-│   │   ├── documents.py             # /api/v1/documents
-│   │   └── forms.py                 # /api/v1/forms
-│   │
-│   ├── services/                    # 業務邏輯
-│   │   ├── user_service.py          # 使用者 CRUD
-│   │   ├── education_service.py     # 學經歷 CRUD
-│   │   ├── document_service.py      # 文件上傳、切塊、嵌入
-│   │   ├── form_parser.py           # 表單欄位偵測
-│   │   ├── intent_router.py         # LLM 欄位分類
-│   │   ├── rag_pipeline.py          # 檢索 + 生成 + 幻覺防護
-│   │   ├── form_filler.py           # 完整填寫流程編排
-│   │   ├── document_generator.py    # docx 模板渲染
-│   │   └── job_service.py           # FormJob async CRUD
-│   │
-│   ├── llm/                         # LLM 適配器
-│   │   ├── base.py                  # 抽象基底類別
-│   │   ├── gemini_adapter.py        # Gemini 實作
-│   │   └── factory.py               # 工廠模式（依 .env 切換）
-│   │
-│   └── utils/
-│       ├── chunker.py               # 文本切塊
-│       └── file_utils.py            # 檔案處理
-│
-├── frontend/
-│   ├── package.json
-│   ├── vite.config.ts               # Vite + React + Tailwind + API proxy
-│   ├── tsconfig.app.json
-│   ├── index.html
-│   │
-│   └── src/
-│       ├── main.tsx                  # React DOM 進入點
-│       ├── App.tsx                   # 路由設定（5 頁面）
-│       ├── index.css                 # Tailwind 匯入
-│       │
-│       ├── api/                      # 型別化 API 客戶端
-│       │   ├── client.ts             # fetch 封裝 + 錯誤處理
-│       │   ├── users.ts
-│       │   ├── education.ts
-│       │   ├── documents.ts
-│       │   └── forms.ts
-│       │
-│       ├── types/                    # TypeScript 介面定義
-│       │   ├── user.ts
-│       │   ├── education.ts
-│       │   ├── document.ts
-│       │   └── form.ts
-│       │
-│       ├── pages/
-│       │   ├── FormFillPage.tsx      # 表單上傳 → 導向預覽
-│       │   ├── FormPreviewPage.tsx   # 欄位審查與編輯
-│       │   ├── FormHistoryPage.tsx   # 填寫歷史紀錄
-│       │   ├── UserProfilePage.tsx   # 使用者資料管理
-│       │   └── KnowledgeBasePage.tsx # 知識庫上傳與搜尋
-│       │
-│       ├── components/
-│       │   ├── layout/
-│       │   │   ├── AppShell.tsx      # 主要佈局（Sidebar + Outlet）
-│       │   │   └── Sidebar.tsx       # 導覽列
-│       │   └── form-fill/
-│       │       ├── FormUploadStep.tsx # 檔案上傳區
-│       │       ├── FieldReviewPanel.tsx # 分割檢視面板
-│       │       └── FilledFieldCard.tsx  # 色碼欄位卡片
-│       │
-│       └── utils/
-│           ├── cn.ts                 # class name 合併
-│           └── formatters.ts         # 來源標籤、色碼、信心度
-│
-├── data/                             # 執行時產生（已 gitignore）
-│   ├── smartfill.db                  # SQLite 資料庫
-│   ├── chroma/                       # ChromaDB 向量資料
-│   ├── uploads/                      # 上傳暫存
-│   └── outputs/                      # 填寫結果
-│
-└── tests/
-    ├── test_form_history.py
-    ├── test_form_preview.py
-    └── test_frontend_preview.py
+??? main.py                          # FastAPI ??脣暺?
+??? requirements.txt                 # Python 靘陷
+??? .env.example                     # ?啣?霈蝭
+??? .gitignore
+??
+??? app/
+??  ??? config.py                    # pydantic-settings 閮剖?
+??  ??? database.py                  # ??甇?SQLAlchemy 撘?
+??  ??? vector_store.py              # ChromaDB 摰Ｘ蝡?
+??  ??? job_store.py                 # 銵典憛怠神隞餃?????DB-backed + in-memory fallback嚗?
+??  ??
+??  ??? models/                      # ORM 璅∪?
+??  ??  ??? user_profile.py
+??  ??  ??? education_experience.py
+??  ??  ??? form_job.py              # FormJob ORM嚗”?桀‵撖思遙????
+??  ??
+??  ??? schemas/                     # Pydantic 隢?/??璅∪?
+??  ??  ??? user_profile.py
+??  ??  ??? education_experience.py
+??  ??  ??? document.py
+??  ??  ??? form.py
+??  ??
+??  ??? routers/                     # API 頝舐
+??  ??  ??? user_profiles.py         # /api/v1/users
+??  ??  ??? education_experience.py  # /api/v1/users/{id}/education
+??  ??  ??? documents.py             # /api/v1/documents
+??  ??  ??? forms.py                 # /api/v1/forms
+??  ??
+??  ??? services/                    # 璆剖??摩
+??  ??  ??? user_service.py          # 雿輻??CRUD
+??  ??  ??? education_service.py     # 摮貊?甇?CRUD
+??  ??  ??? document_service.py      # ?辣銝??憛???
+??  ??  ??? form_parser.py           # 銵典甈??菜葫
+??  ??  ??? intent_router.py         # LLM 甈???
+??  ??  ??? rag_pipeline.py          # 瑼Ｙ揣 + ?? + 撟餉死?脰風
+??  ??  ??? form_filler.py           # 摰憛怠神瘚?蝺冽?
+??  ??  ??? document_generator.py    # docx 璅⊥皜脫?
+??  ??  ??? job_service.py           # FormJob async CRUD
+??  ??
+??  ??? llm/                         # LLM ?拚???
+??  ??  ??? base.py                  # ?質情?箏?憿
+??  ??  ??? gemini_adapter.py        # Gemini 撖虫?
+??  ??  ??? factory.py               # 撌亙?璅∪?嚗? .env ??嚗?
+??  ??
+??  ??? utils/
+??      ??? chunker.py               # ???
+??      ??? file_utils.py            # 瑼???
+??
+??? frontend/
+??  ??? package.json
+??  ??? vite.config.ts               # Vite + React + Tailwind + API proxy
+??  ??? tsconfig.app.json
+??  ??? index.html
+??  ??
+??  ??? src/
+??      ??? main.tsx                  # React DOM ?脣暺?
+??      ??? App.tsx                   # 頝舐閮剖?嚗? ?嚗?
+??      ??? index.css                 # Tailwind ?臬
+??      ??
+??      ??? api/                      # ???API 摰Ｘ蝡?
+??      ??  ??? client.ts             # fetch 撠? + ?航炊??
+??      ??  ??? users.ts
+??      ??  ??? education.ts
+??      ??  ??? documents.ts
+??      ??  ??? forms.ts
+??      ??
+??      ??? types/                    # TypeScript 隞摰儔
+??      ??  ??? user.ts
+??      ??  ??? education.ts
+??      ??  ??? document.ts
+??      ??  ??? form.ts
+??      ??
+??      ??? pages/
+??      ??  ??? FormFillPage.tsx      # 銵典銝 ??撠??汗
+??      ??  ??? FormPreviewPage.tsx   # 甈?撖拇?楊頛?
+??      ??  ??? FormHistoryPage.tsx   # 憛怠神甇瑕蝝??
+??      ??  ??? UserProfilePage.tsx   # 雿輻???恣??
+??      ??  ??? KnowledgeBasePage.tsx # ?亥?摨思??唾???
+??      ??
+??      ??? components/
+??      ??  ??? layout/
+??      ??  ??  ??? AppShell.tsx      # 銝餉?雿?嚗idebar + Outlet嚗?
+??      ??  ??  ??? Sidebar.tsx       # 撠汗??
+??      ??  ??? form-fill/
+??      ??      ??? FormUploadStep.tsx # 瑼?銝?
+??      ??      ??? FieldReviewPanel.tsx # ?瑼Ｚ??Ｘ
+??      ??      ??? FilledFieldCard.tsx  # ?脩Ⅳ甈??∠?
+??      ??
+??      ??? utils/
+??          ??? cn.ts                 # class name ?蔥
+??          ??? formatters.ts         # 靘?璅惜?蝣潦縑敹漲
+??
+??? data/                             # ?瑁????撌?gitignore嚗?
+??  ??? smartfill.db                  # SQLite 鞈?摨?
+??  ??? chroma/                       # ChromaDB ??鞈?
+??  ??? uploads/                      # 銝?怠?
+??  ??? outputs/                      # 憛怠神蝯?
+??
+??? tests/
+    ??? test_form_history.py
+    ??? test_form_preview.py
+    ??? test_frontend_preview.py
 ```
 
-## API 端點
+## API 蝡舫?
 
-### 使用者
+### 雿輻??
 
-| 方法 | 路徑 | 說明 |
+| ?寞? | 頝臬? | 隤芣? |
 |------|------|------|
-| GET | `/api/v1/users/` | 列出所有使用者 |
-| POST | `/api/v1/users/` | 建立使用者 |
-| GET | `/api/v1/users/{id}` | 取得使用者詳情 |
-| PUT | `/api/v1/users/{id}` | 更新使用者 |
-| DELETE | `/api/v1/users/{id}` | 刪除使用者 |
+| GET | `/api/v1/users/` | ???蝙?刻?|
+| POST | `/api/v1/users/` | 撱箇?雿輻??|
+| GET | `/api/v1/users/{id}` | ??雿輻?底??|
+| PUT | `/api/v1/users/{id}` | ?湔雿輻??|
+| DELETE | `/api/v1/users/{id}` | ?芷雿輻??|
 
-### 學經歷
+### 摮貊?甇?
 
-| 方法 | 路徑 | 說明 |
+| ?寞? | 頝臬? | 隤芣? |
 |------|------|------|
-| GET | `/api/v1/users/{id}/education/` | 列出使用者學經歷 |
-| POST | `/api/v1/users/{id}/education/` | 新增學經歷 |
-| DELETE | `/api/v1/users/{id}/education/{entry_id}` | 刪除學經歷 |
+| GET | `/api/v1/users/{id}/education/` | ?雿輻?飛蝬風 |
+| POST | `/api/v1/users/{id}/education/` | ?啣?摮貊?甇?|
+| DELETE | `/api/v1/users/{id}/education/{entry_id}` | ?芷摮貊?甇?|
 
-### 文件
+### ?辣
 
-| 方法 | 路徑 | 說明 |
+| ?寞? | 頝臬? | 隤芣? |
 |------|------|------|
-| POST | `/api/v1/documents/upload` | 上傳文件（multipart） |
-| GET | `/api/v1/documents/search` | 語意搜尋 |
+| POST | `/api/v1/documents/upload` | 銝?辣嚗ultipart嚗?|
+| GET | `/api/v1/documents/search` | 隤??? |
 
-### 表單
+### 銵典
 
-| 方法 | 路徑 | 說明 |
+| ?寞? | 頝臬? | 隤芣? |
 |------|------|------|
-| POST | `/api/v1/forms/parse` | 解析表單欄位（multipart） |
-| POST | `/api/v1/forms/fill` | 智能填寫（multipart: file + user_id） |
-| GET | `/api/v1/forms/download/{filename}` | 下載填寫結果 |
-| GET | `/api/v1/forms/preview/{job_id}` | 取得填寫預覽 |
-| POST | `/api/v1/forms/submit` | 提交修改後的表單（JSON） |
-| GET | `/api/v1/forms/history/{user_id}` | 使用者填寫歷史 |
+| POST | `/api/v1/forms/parse` | 閫??銵典甈?嚗ultipart嚗?|
+| POST | `/api/v1/forms/fill` | ?箄憛怠神嚗ultipart: file + user_id嚗?|
+| GET | `/api/v1/forms/download/{filename}` | 銝?憛怠神蝯? |
+| GET | `/api/v1/forms/preview/{job_id}` | ??憛怠神?汗 |
+| POST | `/api/v1/forms/submit` | ?漱靽格敺?銵典嚗SON嚗?|
+| GET | `/api/v1/forms/history/{user_id}` | 雿輻?‵撖急風??|
 
-## 核心流程
+## ?詨?瘚?
 
 ```
-使用者上傳表單 (.docx/.pdf)
-        │
-        ▼
-  ① 表單解析 (form_parser)
-     偵測 {{variable}} 或 PDF widget
-        │
-        ▼
-  ② 意圖路由 (intent_router)
-     LLM 分類每個欄位 → SQL_DB / VECTOR_DB / SKIP
-        │
-        ├── SQL_DB → 查詢 UserProfile / EducationExperience
-        │
-        ├── VECTOR_DB → ③ RAG 流程 (rag_pipeline)
-        │   ├── ChromaDB 語意檢索
-        │   ├── Gemini 生成答案
-        │   └── 幻覺防護 + 自修正迴圈
-        │
-        └── SKIP → 標記 [需人工補充]
-        │
-        ▼
-  ④ 文件生成 (document_generator)
-     docxtpl 渲染 → 輸出填寫完成的文件
-        │
-        ▼
-  ⑤ 結果審查 (前端 FormPreviewPage)
-     色碼標記、信心度、手動編輯 → 確認提交
+雿輻???唾”??(.docx/.pdf)
+        ??
+        ??
+  ??銵典閫?? (form_parser)
+     ?菜葫 {{variable}} ??PDF widget
+        ??
+        ??
+  ????頝舐 (intent_router)
+     LLM ??瘥?雿???SQL_DB / VECTOR_DB / SKIP
+        ??
+        ??? SQL_DB ???亥岷 UserProfile / EducationExperience
+        ??
+        ??? VECTOR_DB ????RAG 瘚? (rag_pipeline)
+        ??  ??? ChromaDB 隤?瑼Ｙ揣
+        ??  ??? Gemini ??蝑?
+        ??  ??? 撟餉死?脰風 + ?芯耨甇?艘??
+        ??
+        ??? SKIP ??璅? [?鈭箏極鋆?]
+        ??
+        ??
+  ???辣?? (document_generator)
+     docxtpl 皜脫? ??頛詨憛怠神摰???隞?
+        ??
+        ??
+  ??蝯?撖拇 (?垢 FormPreviewPage)
+     ?脩Ⅳ璅??縑敹漲???楊頛???蝣箄??漱
 ```
 
-## 開發指令
+## ??誘
 
 ```bash
-# 後端
-python -m uvicorn main:app --reload           # 開發伺服器
-python -m pytest tests/ -v                     # 執行測試
+# 敺垢
+python -m uvicorn main:app --reload           # ?隡箸???
+python -m pytest tests/ -v                     # ?瑁?皜祈岫
 
-# 前端
+# ?垢
 cd frontend
-npm run dev                                    # Vite 開發伺服器
-npm run build                                  # TypeScript 檢查 + 生產建置
-npm run lint                                   # ESLint 檢查
-npx tsc --noEmit                               # 僅型別檢查
+npm run dev                                    # Vite ?隡箸???
+npm run build                                  # TypeScript 瑼Ｘ + ?撱箇蔭
+npm run lint                                   # ESLint 瑼Ｘ
+npx tsc --noEmit                               # ???交炎??
 ```
 
-## 設計決策
+## 閮剛?瘙箇?
 
-- **ChromaDB sync → async**：ChromaDB 為同步 API，所有呼叫透過 `asyncio.to_thread()` 包裝，避免阻塞 FastAPI 事件迴圈
-- **LLM Adapter Pattern**：抽象基底類別 + 工廠模式，可透過 `.env` 的 `LLM_PROVIDER` 切換不同 LLM 供應商
-- **`[需人工補充]`**：資料不足時的預設填充標記，前端以紅色標示提醒使用者
-- **Job Store**：表單填寫結果持久化至 SQLite（`FormJob` ORM），支援重啟後保留歷史紀錄，無 db session 時自動 fallback 為 in-memory
-- **docxtpl**：處理 Word 模板中變數可能被拆分到多個 XML run 的問題，比純 regex 替換更可靠
+- **ChromaDB sync ??async**嚗hromaDB ?箏?甇?API嚗???恍? `asyncio.to_thread()` ??嚗?憛?FastAPI 鈭辣餈游?
+- **LLM Adapter Pattern**嚗鞊∪摨???+ 撌亙?璅∪?嚗?? `.env` ??`LLM_PROVIDER` ??銝? LLM 靘???
+- **`[?鈭箏極鋆?]`**嚗???頞單???閮剖‵??閮??垢隞亦??脫?蝷箸??蝙?刻?
+- **Job Store**嚗”?桀‵撖怎???銋???SQLite嚗FormJob` ORM嚗??舀??敺??風?脩?????db session ???fallback ??in-memory
+- **docxtpl**嚗???Word 璅⊥銝剛??詨?質◤???啣???XML run ??憿?瘥? regex ?踵??游??
 
-## 授權
+## ??
 
 MIT License
+
