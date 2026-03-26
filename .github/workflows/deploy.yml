@@ -1,13 +1,7 @@
 name: Phase 6.4 - CD Pipeline
 
 on:
-  push:
-    branches: [ main, master ]
-    tags:
-      - 'v*'  # Deploy on version tags
-  release:
-    types: [published]
-  workflow_dispatch:  # Allow manual triggering
+  workflow_dispatch:  # Manual triggering only (project paused)
     inputs:
       environment:
         description: 'Deployment environment'
