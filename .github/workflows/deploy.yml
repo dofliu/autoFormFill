@@ -1,7 +1,11 @@
 name: Phase 6.4 - CD Pipeline
 
 on:
-  workflow_dispatch:  # Manual triggering only (project paused)
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
     inputs:
       environment:
         description: 'Deployment environment'
@@ -22,7 +26,6 @@ env:
   DOCKER_BUILDKIT: 1
   # 優化設置
   COMPOSE_DOCKER_CLI_BUILD: 1
-  DOCKER_BUILDKIT: 1
 
 jobs:
   build-and-push:

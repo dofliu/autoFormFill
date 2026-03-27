@@ -1,7 +1,12 @@
 name: Phase 6.4 - CI Pipeline
 
 on:
-  workflow_dispatch:  # Manual triggering only (project paused)
+  pull_request:
+    branches: [ main, master, develop ]
+    types: [ opened, synchronize, reopened ]
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allow manual triggering as well
 
 env:
   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
